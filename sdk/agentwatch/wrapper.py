@@ -81,11 +81,13 @@ class MonitoredMessages:
             if hasattr(block, "text"):
                 response_text += block.text
             elif hasattr(block, "type") and block.type == "tool_use":
-                tool_calls.append({
-                    "id": block.id,
-                    "name": block.name,
-                    "input": block.input,
-                })
+                tool_calls.append(
+                    {
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    }
+                )
 
         # Record the call
         usage = response.usage

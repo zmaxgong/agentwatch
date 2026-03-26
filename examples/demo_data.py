@@ -46,8 +46,16 @@ PROJECT_WEIGHTS = [25, 20, 15, 15, 10, 8, 7]
 
 # Actual Claude Code tool names
 TOOL_NAMES = [
-    "Read", "Edit", "Write", "Bash", "Grep", "Glob",
-    "Agent", "TodoWrite", "WebSearch", "WebFetch",
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "Grep",
+    "Glob",
+    "Agent",
+    "TodoWrite",
+    "WebSearch",
+    "WebFetch",
     "NotebookEdit",
 ]
 
@@ -57,10 +65,30 @@ TOOL_WEIGHTS = [30, 22, 8, 18, 10, 8, 2, 1, 0.5, 0.3, 0.2]
 # Work hour patterns (hour -> relative activity level)
 # Simulates a developer who works 9am-midnight with peaks
 HOUR_ACTIVITY = {
-    0: 0.3, 1: 0.1, 2: 0.05, 3: 0.02, 4: 0.01, 5: 0.01,
-    6: 0.05, 7: 0.1, 8: 0.3, 9: 0.7, 10: 0.9, 11: 1.0,
-    12: 0.6, 13: 0.8, 14: 1.0, 15: 0.9, 16: 0.8, 17: 0.7,
-    18: 0.5, 19: 0.6, 20: 0.8, 21: 0.9, 22: 0.7, 23: 0.5,
+    0: 0.3,
+    1: 0.1,
+    2: 0.05,
+    3: 0.02,
+    4: 0.01,
+    5: 0.01,
+    6: 0.05,
+    7: 0.1,
+    8: 0.3,
+    9: 0.7,
+    10: 0.9,
+    11: 1.0,
+    12: 0.6,
+    13: 0.8,
+    14: 1.0,
+    15: 0.9,
+    16: 0.8,
+    17: 0.7,
+    18: 0.5,
+    19: 0.6,
+    20: 0.8,
+    21: 0.9,
+    22: 0.7,
+    23: 0.5,
 }
 
 # Day of week activity (0=Mon, 6=Sun)
@@ -109,12 +137,14 @@ def generate_events(
         project = pick_project()
         session_start = generate_timestamp(start_time, now - 600)
         session_duration = random.uniform(600, 7200)  # 10min to 2h
-        sessions.append({
-            "id": sid,
-            "project": project,
-            "start": session_start,
-            "end": min(session_start + session_duration, now),
-        })
+        sessions.append(
+            {
+                "id": sid,
+                "project": project,
+                "start": session_start,
+                "end": min(session_start + session_duration, now),
+            }
+        )
 
     # Track running cost to hit target
     running_cost = 0.0
@@ -266,9 +296,7 @@ def generate_events(
 
     # Calculate actual totals for display
     total_cost = sum(
-        e.get("cost", {}).get("total_cost", 0)
-        for e in events
-        if e["event_type"] == "llm_response"
+        e.get("cost", {}).get("total_cost", 0) for e in events if e["event_type"] == "llm_response"
     )
 
     return events, total_cost
@@ -280,7 +308,7 @@ def send_events(events: List[Dict], backend_url: str, batch_size: int = 50):
     sent = 0
 
     for i in range(0, total, batch_size):
-        batch = events[i:i + batch_size]
+        batch = events[i : i + batch_size]
         data = json.dumps({"events": batch}).encode()
 
         try:
@@ -306,7 +334,9 @@ def main():
     parser = argparse.ArgumentParser(description="Generate demo data for AgentWatch")
     parser.add_argument("--events", type=int, default=5000, help="Number of LLM events to generate")
     parser.add_argument(
-        "--hours", type=int, default=720,
+        "--hours",
+        type=int,
+        default=720,
         help="Time span in hours (default: 720 = 30 days)",
     )
     parser.add_argument("--backend", type=str, default="http://localhost:8100", help="Backend URL")

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 class EventType(str, Enum):
     """Types of events tracked by AgentWatch."""
+
     LLM_REQUEST = "llm_request"
     LLM_RESPONSE = "llm_response"
     TOOL_CALL = "tool_call"
@@ -25,6 +26,7 @@ class EventType(str, Enum):
 
 class AlertSeverity(str, Enum):
     """Severity levels for alerts."""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -33,6 +35,7 @@ class AlertSeverity(str, Enum):
 @dataclass
 class TokenUsage:
     """Token usage for a single LLM call."""
+
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
@@ -46,6 +49,7 @@ class TokenUsage:
 @dataclass
 class CostBreakdown:
     """Cost breakdown for a single LLM call."""
+
     input_cost: float = 0.0
     output_cost: float = 0.0
     total_cost: float = 0.0
@@ -55,6 +59,7 @@ class CostBreakdown:
 @dataclass
 class SecurityFlag:
     """A security concern detected in a request or response."""
+
     flag_type: str  # "prompt_injection", "pii_detected", "jailbreak_attempt", etc.
     severity: AlertSeverity = AlertSeverity.WARNING
     description: str = ""
@@ -64,6 +69,7 @@ class SecurityFlag:
 @dataclass
 class Event:
     """A single telemetry event."""
+
     event_type: EventType
     timestamp: float = field(default_factory=time.time)
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -123,8 +129,7 @@ class Event:
             d["cost"] = asdict(self.cost)
         if self.security_flags:
             d["security_flags"] = [
-                {**asdict(f), "severity": f.severity.value}
-                for f in self.security_flags
+                {**asdict(f), "severity": f.severity.value} for f in self.security_flags
             ]
         # Remove None values for cleaner payloads
         return {k: v for k, v in d.items() if v is not None}

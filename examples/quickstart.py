@@ -46,8 +46,7 @@ def main():
                 {
                     "role": "user",
                     "content": (
-                        "What are the top 3 benefits of "
-                        "monitoring AI agents in production?"
+                        "What are the top 3 benefits of monitoring AI agents in production?"
                     ),
                 }
             ],

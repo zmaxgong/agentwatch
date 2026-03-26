@@ -40,6 +40,7 @@ MODEL_PRICING = {
 @dataclass
 class ClaudeCodeSession:
     """Parsed session info."""
+
     project_path: str
     project_name: str
     session_id: str
@@ -65,12 +66,14 @@ def discover_sessions(claude_dir: Path = CLAUDE_DIR) -> List[ClaudeCodeSession]:
 
         for jsonl_file in project_dir.glob("*.jsonl"):
             session_id = jsonl_file.stem
-            sessions.append(ClaudeCodeSession(
-                project_path=project_name,
-                project_name=readable_name,
-                session_id=session_id,
-                log_path=jsonl_file,
-            ))
+            sessions.append(
+                ClaudeCodeSession(
+                    project_path=project_name,
+                    project_name=readable_name,
+                    session_id=session_id,
+                    log_path=jsonl_file,
+                )
+            )
 
     return sessions
 
@@ -112,10 +115,12 @@ def parse_session_log(
                         if block.get("type") == "text":
                             text += block.get("text", "")
                         elif block.get("type") == "tool_use":
-                            tool_uses.append({
-                                "name": block.get("name", ""),
-                                "id": block.get("id", ""),
-                            })
+                            tool_uses.append(
+                                {
+                                    "name": block.get("name", ""),
+                                    "id": block.get("id", ""),
+                                }
+                            )
                 entry_uuid = entry.get("uuid", "")
                 if entry_uuid:
                     assistant_texts[entry_uuid] = text
@@ -216,9 +221,7 @@ def parse_session_log(
                 if tool_uses:
                     event["tool_name"] = tool_uses[0]["name"]
                     event["metadata"]["tool_count"] = len(tool_uses)
-                    event["metadata"]["tools_used"] = [
-                        t["name"] for t in tool_uses
-                    ]
+                    event["metadata"]["tools_used"] = [t["name"] for t in tool_uses]
 
                 events.append(event)
 
@@ -250,7 +253,7 @@ def send_to_backend(
     total_sent = 0
 
     for i in range(0, len(events), batch_size):
-        batch = events[i:i + batch_size]
+        batch = events[i : i + batch_size]
         data = json.dumps({"events": batch}).encode()
 
         try:
@@ -281,7 +284,8 @@ def import_all(
 
     if project_filter:
         sessions = [
-            s for s in sessions
+            s
+            for s in sessions
             if project_filter.lower() in s.project_name.lower()
             or project_filter.lower() in s.project_path.lower()
         ]
@@ -341,9 +345,7 @@ def watch_mode(
                 events = parse_session_log(session, seen_ids=seen_ids)
                 if events:
                     sent = send_to_backend(events, backend_url)
-                    est_cost = sum(
-                        e.get("cost", {}).get("total_cost", 0) for e in events
-                    )
+                    est_cost = sum(e.get("cost", {}).get("total_cost", 0) for e in events)
                     print(
                         f"  [{datetime.now().strftime('%H:%M:%S')}] "
                         f"{session.project_name}: "
@@ -358,27 +360,33 @@ def watch_mode(
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Import Claude Code session logs into AgentWatch"
-    )
+    parser = argparse.ArgumentParser(description="Import Claude Code session logs into AgentWatch")
     parser.add_argument(
-        "--backend", default="http://localhost:8100",
+        "--backend",
+        default="http://localhost:8100",
         help="AgentWatch backend URL",
     )
     parser.add_argument(
-        "--hours", type=int, default=None,
+        "--hours",
+        type=int,
+        default=None,
         help="Only import events from the last N hours (default: all)",
     )
     parser.add_argument(
-        "--project", type=str, default=None,
+        "--project",
+        type=str,
+        default=None,
         help="Filter by project name (partial match)",
     )
     parser.add_argument(
-        "--watch", action="store_true",
+        "--watch",
+        action="store_true",
         help="Live tail mode: watch for new Claude Code activity",
     )
     parser.add_argument(
-        "--claude-dir", type=str, default=None,
+        "--claude-dir",
+        type=str,
+        default=None,
         help="Override Claude Code projects directory",
     )
     args = parser.parse_args()
@@ -417,11 +425,7 @@ def main():
                 key=lambda x: x[1]["est_cost"],
                 reverse=True,
             ):
-                print(
-                    f"  {proj:<30} "
-                    f"{stats['events']:>5} events  "
-                    f"~${stats['est_cost']:.4f}"
-                )
+                print(f"  {proj:<30} {stats['events']:>5} events  ~${stats['est_cost']:.4f}")
             print()
 
             total_est = sum(s["est_cost"] for s in result["projects"].values())

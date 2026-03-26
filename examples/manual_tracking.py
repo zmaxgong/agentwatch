@@ -54,9 +54,7 @@ def main():
             {"role": "user", "content": "Summarize these findings in bullet points"},
         ],
         response_text=(
-            "- Revenue up 23%\n"
-            "- Operating margin improved to 18%\n"
-            "- Customer growth at 15%"
+            "- Revenue up 23%\n- Operating margin improved to 18%\n- Customer growth at 15%"
         ),
         input_tokens=1200,
         output_tokens=350,

@@ -78,12 +78,15 @@ class AgentWatch:
 
     def end_session(self):
         """End the current monitoring session."""
-        event = self._make_event(EventType.SESSION_END, metadata={
-            "total_cost": self._total_cost,
-            "total_requests": self._request_count,
-            "total_errors": self._error_count,
-            "total_tokens": self._total_tokens,
-        })
+        event = self._make_event(
+            EventType.SESSION_END,
+            metadata={
+                "total_cost": self._total_cost,
+                "total_requests": self._request_count,
+                "total_errors": self._error_count,
+                "total_tokens": self._total_tokens,
+            },
+        )
         self._emit(event)
         self._flush()
         self._running = False
@@ -140,8 +143,8 @@ class AgentWatch:
         refusal_detected = False
         if self.config.enable_hallucination_detection:
             prompt_text = str(messages[-1].get("content", "")) if messages else ""
-            hallucination_score, confidence_score, refusal_detected = (
-                self._hallucination.analyze(prompt_text, response_text)
+            hallucination_score, confidence_score, refusal_detected = self._hallucination.analyze(
+                prompt_text, response_text
             )
 
         # Drift analysis
@@ -274,56 +277,67 @@ class AgentWatch:
         """Generate alerts based on thresholds."""
         # Cost alerts
         if self._hourly_cost > self.config.cost_alert_threshold_hourly:
-            self._emit(self._make_event(
-                EventType.COST_ALERT,
-                metadata={
-                    "alert": "hourly_cost_exceeded",
-                    "threshold": self.config.cost_alert_threshold_hourly,
-                    "current": self._hourly_cost,
-                    "severity": AlertSeverity.WARNING.value,
-                },
-            ))
+            self._emit(
+                self._make_event(
+                    EventType.COST_ALERT,
+                    metadata={
+                        "alert": "hourly_cost_exceeded",
+                        "threshold": self.config.cost_alert_threshold_hourly,
+                        "current": self._hourly_cost,
+                        "severity": AlertSeverity.WARNING.value,
+                    },
+                )
+            )
 
         if self._daily_cost > self.config.cost_alert_threshold_daily:
-            self._emit(self._make_event(
-                EventType.COST_ALERT,
-                metadata={
-                    "alert": "daily_cost_exceeded",
-                    "threshold": self.config.cost_alert_threshold_daily,
-                    "current": self._daily_cost,
-                    "severity": AlertSeverity.CRITICAL.value,
-                },
-            ))
+            self._emit(
+                self._make_event(
+                    EventType.COST_ALERT,
+                    metadata={
+                        "alert": "daily_cost_exceeded",
+                        "threshold": self.config.cost_alert_threshold_daily,
+                        "current": self._daily_cost,
+                        "severity": AlertSeverity.CRITICAL.value,
+                    },
+                )
+            )
 
         # Security alerts
         if event.security_flags:
             critical_flags = [
-                f for f in event.security_flags
-                if f.severity == AlertSeverity.CRITICAL
+                f for f in event.security_flags if f.severity == AlertSeverity.CRITICAL
             ]
             if critical_flags:
-                self._emit(self._make_event(
-                    EventType.SECURITY_ALERT,
-                    security_flags=critical_flags,
-                    metadata={"severity": "critical"},
-                ))
+                self._emit(
+                    self._make_event(
+                        EventType.SECURITY_ALERT,
+                        security_flags=critical_flags,
+                        metadata={"severity": "critical"},
+                    )
+                )
 
         # Hallucination alerts
-        if (event.hallucination_score is not None and
-                event.hallucination_score > self.config.hallucination_confidence_threshold):
-            self._emit(self._make_event(
-                EventType.HALLUCINATION_DETECTED,
-                hallucination_score=event.hallucination_score,
-                metadata={"model": event.model, "trace_id": event.trace_id},
-            ))
+        if (
+            event.hallucination_score is not None
+            and event.hallucination_score > self.config.hallucination_confidence_threshold
+        ):
+            self._emit(
+                self._make_event(
+                    EventType.HALLUCINATION_DETECTED,
+                    hallucination_score=event.hallucination_score,
+                    metadata={"model": event.model, "trace_id": event.trace_id},
+                )
+            )
 
         # Drift alerts
         if event.drift_score is not None and event.drift_score > 0.5:
-            self._emit(self._make_event(
-                EventType.DRIFT_DETECTED,
-                drift_score=event.drift_score,
-                metadata={"model": event.model},
-            ))
+            self._emit(
+                self._make_event(
+                    EventType.DRIFT_DETECTED,
+                    drift_score=event.drift_score,
+                    metadata={"model": event.model},
+                )
+            )
 
     def _sanitize_messages(self, messages: List[Dict]) -> List[Dict]:
         """Sanitize messages for storage — keep structure, truncate content."""
@@ -334,11 +348,13 @@ class AgentWatch:
                 truncated = content[:200] + "..." if len(content) > 200 else content
             else:
                 truncated = "[complex content]"
-            sanitized.append({
-                "role": msg.get("role", "unknown"),
-                "content_length": len(str(content)),
-                "content_preview": truncated,
-            })
+            sanitized.append(
+                {
+                    "role": msg.get("role", "unknown"),
+                    "content_length": len(str(content)),
+                    "content_preview": truncated,
+                }
+            )
         return sanitized
 
     def _emit(self, event: Event):
@@ -364,6 +380,7 @@ class AgentWatch:
 
         try:
             import urllib.request
+
             data = json.dumps({"events": batch}).encode()
             req = urllib.request.Request(
                 f"{self.config.backend_url}/api/v1/events",

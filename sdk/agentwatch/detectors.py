@@ -37,12 +37,9 @@ class SecurityDetector:
 
     def __init__(self, enable_pii: bool = True):
         self.enable_pii = enable_pii
-        self._compiled_injection = [
-            re.compile(p, re.IGNORECASE) for p in self.INJECTION_PATTERNS
-        ]
+        self._compiled_injection = [re.compile(p, re.IGNORECASE) for p in self.INJECTION_PATTERNS]
         self._compiled_pii = {
-            name: re.compile(pattern)
-            for name, pattern in self.PII_PATTERNS.items()
+            name: re.compile(pattern) for name, pattern in self.PII_PATTERNS.items()
         }
 
     def scan_input(self, text: str) -> List[SecurityFlag]:
@@ -53,12 +50,14 @@ class SecurityDetector:
         for pattern in self._compiled_injection:
             match = pattern.search(text)
             if match:
-                flags.append(SecurityFlag(
-                    flag_type="prompt_injection",
-                    severity=AlertSeverity.CRITICAL,
-                    description="Potential prompt injection detected in input",
-                    evidence=match.group()[:100],
-                ))
+                flags.append(
+                    SecurityFlag(
+                        flag_type="prompt_injection",
+                        severity=AlertSeverity.CRITICAL,
+                        description="Potential prompt injection detected in input",
+                        evidence=match.group()[:100],
+                    )
+                )
 
         # Check for PII in inputs
         if self.enable_pii:
@@ -75,17 +74,22 @@ class SecurityDetector:
             flags.extend(self._scan_pii(text, "output"))
 
         # Check for suspicious output patterns
-        if any(phrase in text.lower() for phrase in [
-            "here is the password",
-            "the api key is",
-            "secret key:",
-            "access token:",
-        ]):
-            flags.append(SecurityFlag(
-                flag_type="credential_leak",
-                severity=AlertSeverity.CRITICAL,
-                description="Potential credential leakage detected in output",
-            ))
+        if any(
+            phrase in text.lower()
+            for phrase in [
+                "here is the password",
+                "the api key is",
+                "secret key:",
+                "access token:",
+            ]
+        ):
+            flags.append(
+                SecurityFlag(
+                    flag_type="credential_leak",
+                    severity=AlertSeverity.CRITICAL,
+                    description="Potential credential leakage detected in output",
+                )
+            )
 
         return flags
 
@@ -93,11 +97,13 @@ class SecurityDetector:
         flags = []
         for pii_type, pattern in self._compiled_pii.items():
             if pattern.search(text):
-                flags.append(SecurityFlag(
-                    flag_type="pii_detected",
-                    severity=AlertSeverity.WARNING,
-                    description=f"Potential {pii_type} detected in {context}",
-                ))
+                flags.append(
+                    SecurityFlag(
+                        flag_type="pii_detected",
+                        severity=AlertSeverity.WARNING,
+                        description=f"Potential {pii_type} detected in {context}",
+                    )
+                )
         return flags
 
 
@@ -106,23 +112,40 @@ class HallucinationDetector:
 
     # Hedging phrases that may indicate uncertainty
     HEDGING_PHRASES = [
-        "i think", "i believe", "it's possible", "might be",
-        "could be", "not entirely sure", "approximately",
-        "if i recall", "i'm not certain", "to my knowledge",
-        "as far as i know", "it seems like", "probably",
+        "i think",
+        "i believe",
+        "it's possible",
+        "might be",
+        "could be",
+        "not entirely sure",
+        "approximately",
+        "if i recall",
+        "i'm not certain",
+        "to my knowledge",
+        "as far as i know",
+        "it seems like",
+        "probably",
     ]
 
     # Confidence indicators (inverse of hallucination)
     CONFIDENCE_PHRASES = [
-        "according to", "based on", "the documentation states",
-        "as specified in", "the error message shows",
-        "the data indicates", "from the source",
+        "according to",
+        "based on",
+        "the documentation states",
+        "as specified in",
+        "the error message shows",
+        "the data indicates",
+        "from the source",
     ]
 
     REFUSAL_PHRASES = [
-        "i cannot", "i can't", "i'm unable to",
-        "i don't have access", "i'm not able to",
-        "that's outside my", "i should not",
+        "i cannot",
+        "i can't",
+        "i'm unable to",
+        "i don't have access",
+        "i'm not able to",
+        "that's outside my",
+        "i should not",
     ]
 
     def analyze(self, prompt: str, response: str) -> Tuple[float, float, bool]:
@@ -135,14 +158,8 @@ class HallucinationDetector:
         response_lower = response.lower()
 
         # Count hedging vs confidence indicators
-        hedge_count = sum(
-            1 for phrase in self.HEDGING_PHRASES
-            if phrase in response_lower
-        )
-        confidence_count = sum(
-            1 for phrase in self.CONFIDENCE_PHRASES
-            if phrase in response_lower
-        )
+        hedge_count = sum(1 for phrase in self.HEDGING_PHRASES if phrase in response_lower)
+        confidence_count = sum(1 for phrase in self.CONFIDENCE_PHRASES if phrase in response_lower)
 
         # Check for refusals
         refusal = any(phrase in response_lower for phrase in self.REFUSAL_PHRASES)
@@ -157,14 +174,10 @@ class HallucinationDetector:
         source_penalty = 0.0 if confidence_count > 0 else 0.2
         length_factor = min(word_count / 500, 0.3)  # Longer = slightly more risk
 
-        hallucination_score = min(
-            hedge_ratio * 0.5 + source_penalty + length_factor, 1.0
-        )
+        hallucination_score = min(hedge_ratio * 0.5 + source_penalty + length_factor, 1.0)
 
         # Confidence score (inverse relationship but not direct)
-        confidence_score = max(
-            1.0 - hallucination_score * 0.8 - (0.2 if refusal else 0), 0.0
-        )
+        confidence_score = max(1.0 - hallucination_score * 0.8 - (0.2 if refusal else 0), 0.0)
 
         return round(hallucination_score, 3), round(confidence_score, 3), refusal
 
@@ -207,12 +220,8 @@ class DriftDetector:
         if not self._baseline_set and len(self._response_lengths) >= 20:
             baseline_slice = list(self._response_lengths)[:20]
             self._baseline_avg_length = sum(baseline_slice) / len(baseline_slice)
-            self._baseline_refusal_rate = (
-                sum(list(self._refusal_rates)[:20]) / 20
-            )
-            self._baseline_avg_latency = (
-                sum(list(self._latencies)[:20]) / 20
-            )
+            self._baseline_refusal_rate = sum(list(self._refusal_rates)[:20]) / 20
+            self._baseline_avg_latency = sum(list(self._latencies)[:20]) / 20
             self._baseline_set = True
 
         if not self._baseline_set:

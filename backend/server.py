@@ -140,7 +140,8 @@ async def ingest_events(batch: EventBatch):
         try:
             tokens = event.get("tokens", {})
             cost = event.get("cost", {})
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO events (
                     id, event_type, timestamp, project_id, agent_name,
                     agent_version, environment, session_id, trace_id,
@@ -156,47 +157,51 @@ async def ingest_events(batch: EventBatch):
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
-            """, (
-                event.get("event_id", ""),
-                event.get("event_type", ""),
-                event.get("timestamp", time.time()),
-                event.get("project_id", ""),
-                event.get("agent_name", ""),
-                event.get("agent_version", ""),
-                event.get("environment", ""),
-                event.get("session_id", ""),
-                event.get("trace_id", ""),
-                event.get("provider", ""),
-                event.get("model", ""),
-                event.get("latency_ms", 0),
-                tokens.get("input_tokens", 0),
-                tokens.get("output_tokens", 0),
-                tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
-                cost.get("input_cost", 0),
-                cost.get("output_cost", 0),
-                cost.get("total_cost", 0),
-                event.get("hallucination_score"),
-                event.get("confidence_score"),
-                1 if event.get("refusal_detected") else 0,
-                event.get("drift_score"),
-                event.get("error_type"),
-                event.get("error_message"),
-                event.get("tool_name"),
-                event.get("stop_reason"),
-                event.get("response_text", "")[:500],
-                json.dumps(event.get("security_flags", [])),
-                json.dumps(event.get("metadata", {})),
-                json.dumps(event.get("tags", {})),
-            ))
+            """,
+                (
+                    event.get("event_id", ""),
+                    event.get("event_type", ""),
+                    event.get("timestamp", time.time()),
+                    event.get("project_id", ""),
+                    event.get("agent_name", ""),
+                    event.get("agent_version", ""),
+                    event.get("environment", ""),
+                    event.get("session_id", ""),
+                    event.get("trace_id", ""),
+                    event.get("provider", ""),
+                    event.get("model", ""),
+                    event.get("latency_ms", 0),
+                    tokens.get("input_tokens", 0),
+                    tokens.get("output_tokens", 0),
+                    tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
+                    cost.get("input_cost", 0),
+                    cost.get("output_cost", 0),
+                    cost.get("total_cost", 0),
+                    event.get("hallucination_score"),
+                    event.get("confidence_score"),
+                    1 if event.get("refusal_detected") else 0,
+                    event.get("drift_score"),
+                    event.get("error_type"),
+                    event.get("error_message"),
+                    event.get("tool_name"),
+                    event.get("stop_reason"),
+                    event.get("response_text", "")[:500],
+                    json.dumps(event.get("security_flags", [])),
+                    json.dumps(event.get("metadata", {})),
+                    json.dumps(event.get("tags", {})),
+                ),
+            )
             inserted += 1
 
             # Notify SSE subscribers
-            await notify_subscribers({
-                "type": event.get("event_type"),
-                "timestamp": event.get("timestamp"),
-                "model": event.get("model"),
-                "cost": cost.get("total_cost", 0),
-            })
+            await notify_subscribers(
+                {
+                    "type": event.get("event_type"),
+                    "timestamp": event.get("timestamp"),
+                    "model": event.get("model"),
+                    "cost": cost.get("total_cost", 0),
+                }
+            )
 
         except Exception as e:
             logger.error(f"Failed to insert event: {e}")
@@ -221,7 +226,8 @@ async def dashboard_overview(
         params.append(project_id)
 
     # Core metrics
-    row = conn.execute(f"""
+    row = conn.execute(
+        f"""
         SELECT
             COUNT(*) as total_requests,
             COALESCE(SUM(total_cost), 0) as total_cost,
@@ -233,22 +239,31 @@ async def dashboard_overview(
             COUNT(CASE WHEN refusal_detected = 1 THEN 1 END) as refusal_count
         FROM events
         {where} AND event_type = 'llm_response'
-    """, params).fetchone()
+    """,
+        params,
+    ).fetchone()
 
     # Security alerts count
-    security_row = conn.execute(f"""
+    security_row = conn.execute(
+        f"""
         SELECT COUNT(*) as count FROM events
         {where} AND event_type = 'security_alert'
-    """, params).fetchone()
+    """,
+        params,
+    ).fetchone()
 
     # Cost alerts count
-    cost_alert_row = conn.execute(f"""
+    cost_alert_row = conn.execute(
+        f"""
         SELECT COUNT(*) as count FROM events
         {where} AND event_type = 'cost_alert'
-    """, params).fetchone()
+    """,
+        params,
+    ).fetchone()
 
     # Model breakdown
-    models = conn.execute(f"""
+    models = conn.execute(
+        f"""
         SELECT model,
             COUNT(*) as requests,
             COALESCE(SUM(total_cost), 0) as cost,
@@ -258,10 +273,13 @@ async def dashboard_overview(
         {where} AND event_type = 'llm_response' AND model != ''
         GROUP BY model
         ORDER BY requests DESC
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     # Active sessions
-    sessions = conn.execute(f"""
+    sessions = conn.execute(
+        f"""
         SELECT session_id,
             COUNT(*) as events,
             MIN(timestamp) as started,
@@ -272,7 +290,9 @@ async def dashboard_overview(
         GROUP BY session_id
         ORDER BY last_event DESC
         LIMIT 10
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     conn.close()
 
@@ -313,7 +333,8 @@ async def dashboard_timeseries(
         where += " AND project_id = ?"
         params.append(project_id)
 
-    rows = conn.execute(f"""
+    rows = conn.execute(
+        f"""
         SELECT
             CAST((timestamp / {bucket_seconds}) AS INTEGER) * {bucket_seconds} as bucket,
             COUNT(*) as requests,
@@ -327,7 +348,9 @@ async def dashboard_timeseries(
         {where} AND event_type = 'llm_response'
         GROUP BY bucket
         ORDER BY bucket ASC
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     conn.close()
 
@@ -369,12 +392,15 @@ async def dashboard_alerts(
         where += " AND project_id = ?"
         params.append(project_id)
 
-    rows = conn.execute(f"""
+    rows = conn.execute(
+        f"""
         SELECT * FROM events
         {where}
         ORDER BY timestamp DESC
         LIMIT ?
-    """, params + [limit]).fetchall()
+    """,
+        params + [limit],
+    ).fetchall()
 
     conn.close()
     return {"alerts": [dict(r) for r in rows]}
@@ -407,12 +433,15 @@ async def dashboard_events(
 
     total = conn.execute(f"SELECT COUNT(*) as c FROM events {where}", params).fetchone()["c"]
 
-    rows = conn.execute(f"""
+    rows = conn.execute(
+        f"""
         SELECT * FROM events
         {where}
         ORDER BY timestamp DESC
         LIMIT ? OFFSET ?
-    """, params + [limit, offset]).fetchall()
+    """,
+        params + [limit, offset],
+    ).fetchall()
 
     conn.close()
     return {
@@ -441,7 +470,8 @@ async def dashboard_tools(
         params.append(project_id)
 
     # Tool counts
-    tools = conn.execute(f"""
+    tools = conn.execute(
+        f"""
         SELECT tool_name,
             COUNT(*) as count,
             COALESCE(AVG(latency_ms), 0) as avg_latency
@@ -449,10 +479,13 @@ async def dashboard_tools(
         {where}
         GROUP BY tool_name
         ORDER BY count DESC
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     # Tool usage by hour-of-day for heatmap
-    heatmap = conn.execute(f"""
+    heatmap = conn.execute(
+        f"""
         SELECT tool_name,
             CAST(((timestamp % 86400) / 3600) AS INTEGER) as hour,
             COUNT(*) as count
@@ -460,16 +493,21 @@ async def dashboard_tools(
         {where}
         GROUP BY tool_name, hour
         ORDER BY tool_name, hour
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     # Tool usage by project
-    by_project = conn.execute(f"""
+    by_project = conn.execute(
+        f"""
         SELECT tool_name, project_id, COUNT(*) as count
         FROM events
         {where}
         GROUP BY tool_name, project_id
         ORDER BY count DESC
-    """, params).fetchall()
+    """,
+        params,
+    ).fetchall()
 
     conn.close()
     return {
@@ -490,7 +528,8 @@ async def dashboard_projection(
     cutoff = now - (hours * 3600)
 
     # Total cost and time span
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT
             COALESCE(SUM(total_cost), 0) as total_cost,
             COUNT(*) as total_requests,
@@ -499,13 +538,16 @@ async def dashboard_projection(
             MAX(timestamp) as last_event
         FROM events
         WHERE timestamp > ? AND event_type = 'llm_response'
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     # Dynamic granularity: hourly for <= 48h, daily otherwise
     if hours <= 48:
         # Hourly buckets
         bucket_seconds = 3600
-        trend = conn.execute("""
+        trend = conn.execute(
+            """
             SELECT
                 CAST((timestamp / ?) AS INTEGER) * ? as bucket,
                 COALESCE(SUM(total_cost), 0) as cost,
@@ -515,7 +557,9 @@ async def dashboard_projection(
             WHERE timestamp > ? AND event_type = 'llm_response'
             GROUP BY bucket
             ORDER BY bucket ASC
-        """, [bucket_seconds, bucket_seconds, cutoff]).fetchall()
+        """,
+            [bucket_seconds, bucket_seconds, cutoff],
+        ).fetchall()
         trend_data = [
             {
                 "label": datetime.fromtimestamp(r["bucket"]).strftime("%H:%M"),
@@ -529,7 +573,8 @@ async def dashboard_projection(
         granularity = "hourly"
     else:
         # Daily buckets
-        trend = conn.execute("""
+        trend = conn.execute(
+            """
             SELECT
                 DATE(timestamp, 'unixepoch', 'localtime') as day,
                 COALESCE(SUM(total_cost), 0) as cost,
@@ -539,7 +584,9 @@ async def dashboard_projection(
             WHERE timestamp > ? AND event_type = 'llm_response'
             GROUP BY day
             ORDER BY day ASC
-        """, [cutoff]).fetchall()
+        """,
+            [cutoff],
+        ).fetchall()
         trend_data = [
             {
                 "label": r["day"][5:],  # MM-DD
@@ -552,7 +599,8 @@ async def dashboard_projection(
         granularity = "daily"
 
     # Per-model cost breakdown
-    model_costs = conn.execute("""
+    model_costs = conn.execute(
+        """
         SELECT model,
             COALESCE(SUM(total_cost), 0) as cost,
             COUNT(*) as requests
@@ -560,7 +608,9 @@ async def dashboard_projection(
         WHERE timestamp > ? AND event_type = 'llm_response' AND model != ''
         GROUP BY model
         ORDER BY cost DESC
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     conn.close()
 
@@ -594,7 +644,8 @@ async def dashboard_billing_window():
     now = time.time()
     cutoff = now - (5 * 3600)
 
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT
             COALESCE(SUM(total_cost), 0) as cost,
             COALESCE(SUM(total_tokens), 0) as tokens,
@@ -603,10 +654,13 @@ async def dashboard_billing_window():
             COALESCE(SUM(output_tokens), 0) as output_tokens
         FROM events
         WHERE timestamp > ? AND event_type = 'llm_response'
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     # Hourly breakdown within the 5h window
-    hourly = conn.execute("""
+    hourly = conn.execute(
+        """
         SELECT
             CAST((timestamp / 3600) AS INTEGER) * 3600 as bucket,
             COALESCE(SUM(total_cost), 0) as cost,
@@ -615,7 +669,9 @@ async def dashboard_billing_window():
         WHERE timestamp > ? AND event_type = 'llm_response'
         GROUP BY bucket
         ORDER BY bucket ASC
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     conn.close()
     return {
@@ -651,7 +707,8 @@ async def dashboard_cumulative_cost(
     else:
         bucket_seconds = 86400  # 1 day
 
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT
             CAST((timestamp / ?) AS INTEGER) * ? as bucket,
             COALESCE(SUM(total_cost), 0) as cost
@@ -659,7 +716,9 @@ async def dashboard_cumulative_cost(
         WHERE timestamp > ? AND event_type = 'llm_response'
         GROUP BY bucket
         ORDER BY bucket ASC
-    """, [bucket_seconds, bucket_seconds, cutoff]).fetchall()
+    """,
+        [bucket_seconds, bucket_seconds, cutoff],
+    ).fetchall()
 
     conn.close()
 
@@ -669,12 +728,14 @@ async def dashboard_cumulative_cost(
     fmt = "%H:%M" if hours <= 48 else "%m/%d"
     for r in rows:
         running += r["cost"]
-        cumulative.append({
-            "label": datetime.fromtimestamp(r["bucket"]).strftime(fmt),
-            "timestamp": r["bucket"],
-            "cost": round(r["cost"], 4),
-            "cumulative": round(running, 4),
-        })
+        cumulative.append(
+            {
+                "label": datetime.fromtimestamp(r["bucket"]).strftime(fmt),
+                "timestamp": r["bucket"],
+                "cost": round(r["cost"], 4),
+                "cumulative": round(running, 4),
+            }
+        )
 
     return {"data": cumulative, "total": round(running, 4)}
 
@@ -688,7 +749,8 @@ async def dashboard_sessions(
     conn = get_db()
     cutoff = time.time() - (hours * 3600)
 
-    sessions = conn.execute("""
+    sessions = conn.execute(
+        """
         SELECT
             session_id,
             project_id,
@@ -705,7 +767,9 @@ async def dashboard_sessions(
         GROUP BY session_id
         ORDER BY ended DESC
         LIMIT ?
-    """, [cutoff, limit]).fetchall()
+    """,
+        [cutoff, limit],
+    ).fetchall()
 
     conn.close()
     return {"sessions": [dict(s) for s in sessions]}
@@ -716,11 +780,14 @@ async def dashboard_session_detail(session_id: str):
     """Get all events for a single session (for replay view)."""
     conn = get_db()
 
-    events = conn.execute("""
+    events = conn.execute(
+        """
         SELECT * FROM events
         WHERE session_id = ?
         ORDER BY timestamp ASC
-    """, [session_id]).fetchall()
+    """,
+        [session_id],
+    ).fetchall()
 
     conn.close()
     return {"session_id": session_id, "events": [dict(e) for e in events]}
@@ -737,7 +804,8 @@ async def dashboard_comparison(
     prev_start = current_start - (hours * 3600)
 
     def get_period_stats(start, end):
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT
                 COUNT(*) as requests,
                 COALESCE(SUM(total_cost), 0) as cost,
@@ -749,7 +817,9 @@ async def dashboard_comparison(
                 COUNT(DISTINCT session_id) as sessions
             FROM events
             WHERE timestamp > ? AND timestamp <= ? AND event_type = 'llm_response'
-        """, [start, end]).fetchone()
+        """,
+            [start, end],
+        ).fetchone()
         return dict(row) if row else {}
 
     current = get_period_stats(current_start, now)
@@ -809,10 +879,13 @@ async def dashboard_cache_efficiency(
     conn = get_db()
     cutoff = time.time() - (hours * 3600)
 
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT metadata_json FROM events
         WHERE timestamp > ? AND event_type = 'llm_response' AND metadata_json != '{}'
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     total_cache_read = 0
     total_cache_write = 0
@@ -833,14 +906,17 @@ async def dashboard_cache_efficiency(
             pass
 
     # Get total token counts from the events table
-    totals = conn.execute("""
+    totals = conn.execute(
+        """
         SELECT
             COALESCE(SUM(input_tokens), 0) as total_input,
             COALESCE(SUM(output_tokens), 0) as total_output,
             COUNT(*) as total_events
         FROM events
         WHERE timestamp > ? AND event_type = 'llm_response'
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     total_input = totals["total_input"]
     total_output = totals["total_output"]
@@ -879,7 +955,8 @@ async def dashboard_usage_patterns(
     cutoff = time.time() - (hours * 3600)
 
     # Hour of day (local time)
-    hourly = conn.execute("""
+    hourly = conn.execute(
+        """
         SELECT
             CAST(strftime('%H', timestamp, 'unixepoch', 'localtime') AS INTEGER) as hour,
             COUNT(*) as requests,
@@ -889,10 +966,13 @@ async def dashboard_usage_patterns(
         WHERE timestamp > ? AND event_type = 'llm_response'
         GROUP BY hour
         ORDER BY hour ASC
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     # Day of week (0=Sunday, 6=Saturday)
-    daily = conn.execute("""
+    daily = conn.execute(
+        """
         SELECT
             CAST(strftime('%w', timestamp, 'unixepoch', 'localtime') AS INTEGER) as dow,
             COUNT(*) as requests,
@@ -902,10 +982,13 @@ async def dashboard_usage_patterns(
         WHERE timestamp > ? AND event_type = 'llm_response'
         GROUP BY dow
         ORDER BY dow ASC
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     # Tool usage by hour (for heatmap)
-    tool_hourly = conn.execute("""
+    tool_hourly = conn.execute(
+        """
         SELECT
             tool_name,
             CAST(strftime('%H', timestamp, 'unixepoch', 'localtime') AS INTEGER) as hour,
@@ -917,7 +1000,9 @@ async def dashboard_usage_patterns(
             AND tool_name != ''
         GROUP BY tool_name, hour
         ORDER BY tool_name, hour
-    """, [cutoff]).fetchall()
+    """,
+        [cutoff],
+    ).fetchall()
 
     day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -956,7 +1041,8 @@ async def dashboard_share_stats(
     conn = get_db()
     cutoff = time.time() - (hours * 3600)
 
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT
             COUNT(*) as total_requests,
             COALESCE(SUM(total_cost), 0) as total_cost,
@@ -969,27 +1055,38 @@ async def dashboard_share_stats(
             MAX(timestamp) as last_event
         FROM events
         WHERE timestamp > ? AND event_type = 'llm_response'
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     # Top model
-    top_model = conn.execute("""
+    top_model = conn.execute(
+        """
         SELECT model, COUNT(*) as c FROM events
         WHERE timestamp > ? AND event_type = 'llm_response' AND model != ''
         GROUP BY model ORDER BY c DESC LIMIT 1
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     # Top project
-    top_project = conn.execute("""
+    top_project = conn.execute(
+        """
         SELECT project_id, COALESCE(SUM(total_cost), 0) as cost FROM events
         WHERE timestamp > ? AND event_type = 'llm_response' AND project_id != ''
         GROUP BY project_id ORDER BY cost DESC LIMIT 1
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     # Tool count
-    tool_count = conn.execute("""
+    tool_count = conn.execute(
+        """
         SELECT COUNT(DISTINCT tool_name) as c FROM events
         WHERE timestamp > ? AND event_type = 'tool_call' AND tool_name IS NOT NULL
-    """, [cutoff]).fetchone()
+    """,
+        [cutoff],
+    ).fetchone()
 
     total_cost = row["total_cost"]
     first_event = row["first_event"] or time.time()
@@ -1013,11 +1110,7 @@ async def dashboard_share_stats(
         "daily_avg": round(daily_avg, 2),
         "top_model": top_model["model"] if top_model else "N/A",
         "top_project": (
-            (top_project["project_id"] or "").replace(
-                "claude-code:", ""
-            )
-            if top_project
-            else "N/A"
+            (top_project["project_id"] or "").replace("claude-code:", "") if top_project else "N/A"
         ),
         "unique_tools": tool_count["c"] if tool_count else 0,
     }
@@ -1030,4 +1123,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8100)

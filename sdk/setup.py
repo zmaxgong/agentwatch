@@ -7,9 +7,7 @@ setup(
     version="0.1.0",
     description="Observability SDK for AI agents",
     long_description=(
-        open("../README.md").read()
-        if __import__("os").path.exists("../README.md")
-        else ""
+        open("../README.md").read() if __import__("os").path.exists("../README.md") else ""
     ),
     long_description_content_type="text/markdown",
     author="Tandm Labs",
