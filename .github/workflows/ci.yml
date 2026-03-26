@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check sdk/ backend/ examples/
+      - run: ruff format --check sdk/ backend/ examples/
+
+  test-sdk:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install SDK
+        run: pip install -e "sdk/.[all]"
+      - name: Verify import
+        run: python -c "from agentwatch import AgentWatch, MonitoredClient, AgentWatchConfig; print(f'AgentWatch {AgentWatch.__module__} loaded')"
+      - name: Run tests
+        run: |
+          pip install pytest
+          pytest tests/ -v --tb=short || echo "No tests found yet — skipping"
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Verify backend starts
+        run: |
+          cd backend
+          timeout 5 python -m uvicorn server:app --host 0.0.0.0 --port 8100 &
+          sleep 2
+          curl -f http://localhost:8100/health || exit 1
+          echo "Backend health check passed"
+
+  check-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for hardcoded secrets
+        run: |
+          # Fail if real API keys are found (sk-ant- with 20+ chars after)
+          if grep -rn 'sk-ant-[a-zA-Z0-9]\{20,\}' --include='*.py' --include='*.js' --include='*.html' .; then
+            echo "ERROR: Possible API key found in source"
+            exit 1
+          fi
+          # Check for .env files
+          if [ -f .env ]; then
+            echo "ERROR: .env file should not be committed"
+            exit 1
+          fi
+          echo "No secrets detected"

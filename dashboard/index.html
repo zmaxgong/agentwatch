@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentWatch — AI Agent Observability</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0a; --panel: #101010; --panel-2: #141414;
+      --border: #1e1e1e; --border-2: #2a2a2a;
+      --text: #c8c8c8; --text-mid: #888888; --text-dim: #505050;
+      --amber: #f0b429; --amber-dim: #7a5a10;
+      --green: #3ddb7e; --red: #ff4d6d; --blue: #6eb5ff;
+      --purple: #c084fc; --cyan: #22d3ee; --pink: #f472b6;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+    .container { max-width: 1440px; margin: 0 auto; padding: 0 20px 40px; }
+
+    /* Topbar */
+    .topbar { padding: 10px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 100; }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-logo { width: 32px; height: 32px; border-radius: 6px; overflow: hidden; }
+    .topbar-logo img { width: 100%; height: 100%; object-fit: cover; }
+    .topbar-title { font-size: 15px; font-weight: 700; letter-spacing: 0.03em; }
+    .topbar-sub { font-size: 11px; color: var(--text-dim); }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .topbar-meta { font-size: 11px; color: var(--text-dim); }
+    .topbar-meta span { color: var(--text-mid); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .dot.live { background: var(--green); box-shadow: 0 0 8px rgba(61,219,126,0.4); }
+    .dot.dead { background: var(--red); box-shadow: 0 0 8px rgba(255,77,109,0.4); }
+    .refresh-btn { padding: 3px 10px; font-size: 11px; font-family: inherit; background: none; border: 1px solid var(--border-2); color: var(--text-dim); border-radius: 3px; cursor: pointer; transition: 0.15s; display: flex; align-items: center; gap: 5px; }
+    .refresh-btn:hover { border-color: var(--amber); color: var(--amber); }
+    .refresh-btn.spinning .refresh-icon { animation: spin 0.7s linear infinite; }
+    .refresh-icon { display: inline-block; font-size: 12px; }
+    .last-updated { font-size: 10px; color: var(--text-dim); }
+
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 20px; overflow-x: auto; }
+    .tab { padding: 10px 16px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); border: none; border-bottom: 2px solid transparent; background: none; cursor: pointer; font-family: inherit; transition: 0.15s; white-space: nowrap; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+    /* Controls row */
+    .controls { display: flex; align-items: center; gap: 6px; padding: 12px 0; flex-wrap: wrap; }
+    .time-btn { padding: 4px 10px; font-size: 11px; font-family: inherit; background: none; border: 1px solid var(--border-2); color: var(--text-dim); border-radius: 3px; cursor: pointer; transition: 0.15s; }
+    .time-btn:hover { border-color: var(--amber-dim); color: var(--text); }
+    .time-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(240,180,41,0.08); }
+    .date-input { padding: 4px 10px; font-size: 11px; font-family: inherit; background: var(--panel); border: 1px solid var(--border-2); color: var(--text); border-radius: 3px; cursor: pointer; }
+    .date-input::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
+    .controls-spacer { flex: 1; }
+
+    /* Section labels */
+    .section-label { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; font-size: 11px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--amber); }
+    .section-label::before, .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* KPI Row */
+    .kpi-row { display: flex; gap: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 20px; }
+    .kpi { flex: 1; padding: 16px 14px; text-align: center; border-right: 1px solid var(--border); min-width: 0; }
+    .kpi:last-child { border-right: none; }
+    .kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-dim); margin-bottom: 6px; }
+    .kpi-value { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .kpi-sub { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+
+    /* Charts */
+    .charts-grid { display: grid; gap: 16px; margin-bottom: 20px; }
+    .g2 { grid-template-columns: 1fr 1fr; }
+    .g3 { grid-template-columns: 2fr 1fr; }
+    .panel { background: var(--panel); border: 1px solid var(--border); padding: 16px; }
+    .panel-title { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-mid); margin-bottom: 12px; }
+    .chart-wrap { position: relative; }
+
+    /* Savings card */
+    .savings-card { background: var(--panel); border: 1px solid var(--border); border-top: 2px solid var(--green); padding: 20px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
+    .savings-item { text-align: center; }
+    .savings-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-dim); margin-bottom: 6px; }
+    .savings-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+    .savings-sub { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+
+    /* Delta badges */
+    .delta { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 2px; }
+    .delta.up { background: rgba(61,219,126,0.12); color: var(--green); }
+    .delta.down { background: rgba(255,77,109,0.12); color: var(--red); }
+    .delta.neutral { background: rgba(136,136,136,0.12); color: var(--text-mid); }
+
+    /* Tool bars */
+    .tool-bar-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; }
+    .tool-bar-name { width: 140px; color: var(--text-mid); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tool-bar-track { flex: 1; height: 18px; background: var(--panel-2); border-radius: 2px; overflow: hidden; position: relative; }
+    .tool-bar-fill { height: 100%; border-radius: 2px; display: flex; align-items: center; padding-left: 6px; font-size: 10px; font-weight: 600; color: var(--bg); min-width: 24px; }
+    .tool-bar-count { width: 50px; text-align: right; font-weight: 600; }
+
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); }
+    .data-table th { background: var(--panel-2); color: var(--text-dim); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-2); position: sticky; top: 0; cursor: pointer; user-select: none; transition: 0.15s; white-space: nowrap; }
+    .data-table th:hover { color: var(--amber); }
+    .data-table th.sorted { color: var(--amber); }
+    .data-table th .sort-arrow { margin-left: 4px; font-size: 8px; }
+    .data-table th.r, .data-table td.r { text-align: right; }
+    .data-table td { padding: 8px 12px; font-size: 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .data-table tr.clickable { cursor: pointer; }
+    .data-table tr.clickable:hover td { background: rgba(240,180,41,0.04); }
+
+    /* Session filters */
+    .filter-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+    .filter-input { padding: 4px 10px; font-size: 11px; font-family: inherit; background: var(--panel); border: 1px solid var(--border-2); color: var(--text); border-radius: 3px; width: 200px; }
+    .filter-input::placeholder { color: var(--text-dim); }
+    .filter-select { padding: 4px 10px; font-size: 11px; font-family: inherit; background: var(--panel); border: 1px solid var(--border-2); color: var(--text); border-radius: 3px; }
+
+    /* Session replay */
+    .replay-event { display: flex; gap: 12px; padding: 8px 12px; border-left: 2px solid var(--border); margin-left: 12px; font-size: 12px; }
+    .replay-event.llm { border-left-color: var(--amber); }
+    .replay-event.tool { border-left-color: var(--blue); }
+    .replay-event.alert { border-left-color: var(--red); }
+    .replay-time { color: var(--text-dim); font-size: 10px; min-width: 50px; }
+    .replay-content { flex: 1; }
+    .replay-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+    .replay-detail { color: var(--text-mid); font-size: 11px; }
+    .replay-cost { font-weight: 600; min-width: 70px; text-align: right; }
+
+    /* Billing */
+    .billing-window { background: var(--panel); border: 1px solid var(--border); padding: 14px 16px; margin-bottom: 20px; }
+    .billing-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .billing-title { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-mid); }
+    .billing-bar { width: 100%; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+    .billing-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+    .billing-fill.safe { background: var(--green); }
+    .billing-fill.warn { background: var(--amber); }
+    .billing-fill.danger { background: var(--red); }
+    .billing-stats { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); }
+
+    /* Comparison */
+    .compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .compare-card { background: var(--panel); border: 1px solid var(--border); padding: 14px; text-align: center; }
+    .compare-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 8px; }
+    .compare-values { display: flex; justify-content: center; align-items: baseline; gap: 12px; }
+    .compare-current { font-size: 18px; font-weight: 700; }
+    .compare-prev { font-size: 12px; color: var(--text-dim); }
+
+    /* Utilities */
+    .amber { color: var(--amber); } .green { color: var(--green); } .red { color: var(--red); }
+    .blue { color: var(--blue); } .purple { color: var(--purple); } .cyan { color: var(--cyan); }
+    .dim { color: var(--text-dim); } .mid { color: var(--text-mid); } .bold { font-weight: 700; }
+    .empty { text-align: center; padding: 48px 16px; color: var(--text-dim); font-size: 12px; }
+    .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border-2); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .back-btn { font-size: 11px; font-family: inherit; background: none; border: 1px solid var(--border-2); color: var(--text-dim); padding: 4px 12px; border-radius: 3px; cursor: pointer; margin-bottom: 12px; }
+    .back-btn:hover { border-color: var(--amber); color: var(--amber); }
+    /* Share card */
+    .share-card { background: linear-gradient(135deg, #0a0a0a 0%, #141414 100%); border: 2px solid var(--amber); border-radius: 12px; padding: 28px; margin-bottom: 20px; position: relative; overflow: hidden; }
+    .share-card::before { content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(240,180,41,0.06) 0%, transparent 70%); }
+    .share-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
+    .share-card-title { font-size: 20px; font-weight: 700; }
+    .share-card-period { font-size: 11px; color: var(--text-dim); }
+    .share-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; position: relative; }
+    .share-card-stat { text-align: center; }
+    .share-card-stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+    .share-card-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-top: 4px; }
+    .share-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); position: relative; }
+    .share-card-brand { font-size: 11px; color: var(--text-dim); }
+    .share-btn { padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: inherit; background: var(--amber); color: #0a0a0a; border: none; border-radius: 4px; cursor: pointer; transition: 0.15s; }
+    .share-btn:hover { background: #ffc843; }
+
+    /* Cache panel */
+    .cache-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .cache-card { background: var(--panel); border: 1px solid var(--border); padding: 16px; text-align: center; }
+    .cache-value { font-size: 24px; font-weight: 700; }
+    .cache-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 6px; }
+    .cache-bar { width: 100%; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .cache-fill { height: 100%; border-radius: 4px; background: var(--cyan); transition: width 0.5s; }
+
+    /* Patterns */
+    .pattern-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .heatmap-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; }
+    .heatmap-cell { aspect-ratio: 1; border-radius: 2px; position: relative; }
+    .heatmap-cell:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1a1a1a; border: 1px solid var(--border-2); color: var(--text); padding: 3px 8px; font-size: 10px; white-space: nowrap; border-radius: 3px; z-index: 10; pointer-events: none; }
+    .heatmap-labels { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin-top: 4px; }
+    .heatmap-label { font-size: 8px; color: var(--text-dim); text-align: center; }
+    .day-bar-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+    .day-bar-name { width: 40px; font-size: 11px; color: var(--text-mid); text-align: right; }
+    .day-bar-track { flex: 1; height: 22px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
+    .day-bar-fill { height: 100%; border-radius: 2px; display: flex; align-items: center; padding-left: 8px; font-size: 10px; font-weight: 600; }
+    .day-bar-count { width: 60px; text-align: right; font-size: 11px; font-weight: 600; }
+
+    @media (max-width: 900px) { .g2, .g3 { grid-template-columns: 1fr; } .kpi-row { flex-wrap: wrap; } .kpi { min-width: 50%; } .savings-card { grid-template-columns: 1fr 1fr; } .compare-grid { grid-template-columns: 1fr; } .share-card-grid { grid-template-columns: 1fr 1fr; } .cache-grid { grid-template-columns: 1fr 1fr; } .pattern-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API = "http://localhost:8100/api/v1";
+const POLL = 8000;
+const TOOL_COLORS = { Bash:"#f0b429", Read:"#6eb5ff", Edit:"#3ddb7e", Write:"#c084fc", Grep:"#22d3ee", Glob:"#f472b6", Agent:"#ff4d6d", TodoWrite:"#888", ToolSearch:"#888" };
+
+let S = {
+  tab:"overview", hours:720, dateFilter:null,
+  overview:null, timeseries:[], events:[], tools:null,
+  projection:null, sessions:null, comparison:null,
+  billing:null, cumulative:null, cache:null, patterns:null, shareStats:null,
+  replayId:null, replayData:null, loading:true, error:null, lastUpdated:null, refreshing:false,
+  // Sorting state
+  sessionSort:{col:"ended",dir:"desc"}, sessionFilter:"",
+  eventSort:{col:"timestamp",dir:"desc"}, eventTypeFilter:"",
+};
+
+// Helpers
+const $=s=>document.querySelector(s);
+function el(t,a,...c){ const e=document.createElement(t); if(a)Object.entries(a).forEach(([k,v])=>{ if(k==="className")e.className=v; else if(k==="style"&&typeof v==="object")Object.assign(e.style,v); else if(k.startsWith("on"))e.addEventListener(k.slice(2).toLowerCase(),v); else e.setAttribute(k,v); }); c.flat().forEach(ch=>{ if(ch==null||ch===false)return; e.appendChild(typeof ch==="string"?document.createTextNode(ch):ch); }); return e; }
+function fC(v){ if(v==null)return"-"; if(v>=1)return"$"+v.toFixed(2); if(v>=0.01)return"$"+v.toFixed(3); return"$"+v.toFixed(4); }
+function fT(v){ if(v==null)return"-"; if(v>=1e6)return(v/1e6).toFixed(1)+"M"; if(v>=1e3)return(v/1e3).toFixed(1)+"K"; return v.toString(); }
+function fL(ms){ if(!ms)return"-"; return ms>=1000?(ms/1000).toFixed(1)+"s":Math.round(ms)+"ms"; }
+function tA(ts){ const d=Date.now()/1000-ts; if(d<60)return"now"; if(d<3600)return Math.floor(d/60)+"m"; if(d<86400)return Math.floor(d/3600)+"h"; return Math.floor(d/86400)+"d"; }
+function sC(s){ if(s==null)return"dim"; return s<0.3?"green":s<0.6?"amber":"red"; }
+function deltaClass(v){ return v>5?"up":v<-5?"down":"neutral"; }
+function deltaStr(v){ return(v>0?"+":"")+v.toFixed(1)+"%"; }
+function sortArrow(col,sortState){ if(sortState.col!==col)return""; return sortState.dir==="asc"?"\u25B2":"\u25BC"; }
+function toggleSort(col,sortState){ if(sortState.col===col){ sortState.dir=sortState.dir==="asc"?"desc":"asc"; }else{ sortState.col=col; sortState.dir="desc"; } render(); }
+
+// Data
+async function fetchAll(){
+  try{
+    const [ovR,tsR,evR]=await Promise.all([
+      fetch(`${API}/dashboard/overview?hours=${S.hours}`),
+      fetch(`${API}/dashboard/timeseries?hours=${S.hours}&bucket_minutes=${S.hours<=6?5:S.hours<=24?15:S.hours<=168?60:360}`),
+      fetch(`${API}/dashboard/events?hours=${S.hours}&limit=500`),
+    ]);
+    if(!ovR.ok)throw new Error("Backend unreachable");
+    const [ov,ts,ev]=await Promise.all([ovR.json(),tsR.json(),evR.json()]);
+    S.overview=ov; S.timeseries=ts.data||[]; S.events=ev.events||[];
+    const [tlR,prR,ssR,cmR,blR,cuR]=await Promise.all([
+      fetch(`${API}/dashboard/tools?hours=${S.hours}`),
+      fetch(`${API}/dashboard/projection?hours=${S.hours}`),
+      fetch(`${API}/dashboard/sessions?hours=${S.hours}`),
+      fetch(`${API}/dashboard/comparison?hours=${S.hours}`),
+      fetch(`${API}/dashboard/billing-window`),
+      fetch(`${API}/dashboard/cumulative-cost?hours=${S.hours}`),
+    ]);
+    S.tools=await tlR.json(); S.projection=await prR.json(); S.sessions=await ssR.json(); S.comparison=await cmR.json(); S.billing=await blR.json(); S.cumulative=await cuR.json();
+    // Fetch new endpoints (non-blocking — graceful if backend is older)
+    try{
+      const [caR,paR,shR]=await Promise.all([
+        fetch(`${API}/dashboard/cache-efficiency?hours=${S.hours}`),
+        fetch(`${API}/dashboard/usage-patterns?hours=${S.hours}`),
+        fetch(`${API}/dashboard/share-stats?hours=${S.hours}`),
+      ]);
+      if(caR.ok) S.cache=await caR.json();
+      if(paR.ok) S.patterns=await paR.json();
+      if(shR.ok) S.shareStats=await shR.json();
+    }catch(e){}
+    S.error=null; S.lastUpdated=new Date();
+  }catch(e){ S.error=e.message; }
+  S.loading=false; S.refreshing=false; render();
+}
+async function fetchReplay(sid){
+  S.replayId=sid; S.replayData=null; render();
+  const r=await fetch(`${API}/dashboard/session/${sid}`);
+  S.replayData=await r.json(); render();
+}
+
+// Charts
+let charts={};
+function destroyCharts(){ Object.values(charts).forEach(c=>c.destroy()); charts={}; }
+const cDef = {
+  responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{ legend:{display:false}, tooltip:{ backgroundColor:"#1a1a1a", borderColor:"#2a2a2a", borderWidth:1, titleColor:"#888", bodyColor:"#c8c8c8", titleFont:{family:"'JetBrains Mono'",size:10}, bodyFont:{family:"'JetBrains Mono'",size:11}, padding:10, cornerRadius:2 }},
+  scales:{ x:{ grid:{color:"#1a1a1a"}, ticks:{color:"#505050",font:{family:"'JetBrains Mono'",size:10},maxRotation:0}, border:{color:"#1e1e1e"} }, y:{ grid:{color:"#1a1a1a"}, ticks:{color:"#505050",font:{family:"'JetBrains Mono'",size:10}}, border:{color:"#1e1e1e"} } }
+};
+
+function tLabel(d){ const dt=new Date(d.time); return S.hours<=24?dt.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):dt.toLocaleDateString([],{month:"short",day:"numeric"}); }
+
+function renderCharts(){
+  const ts=S.timeseries;
+  if(!ts.length) return;
+  // Cost
+  const cc=$("#ch-cost");
+  if(cc){ if(charts.cost)charts.cost.destroy(); charts.cost=new Chart(cc,{type:"bar",data:{labels:ts.map(tLabel),datasets:[{data:ts.map(d=>d.cost),backgroundColor:"rgba(240,180,41,0.3)",borderColor:"#f0b429",borderWidth:1,borderRadius:1}]},options:{...cDef,scales:{...cDef.scales,y:{...cDef.scales.y,ticks:{...cDef.scales.y.ticks,callback:v=>"$"+v.toFixed(2)}}}}}); }
+  // Cumulative cost
+  const cu=$("#ch-cumulative");
+  if(cu&&S.cumulative?.data?.length){ if(charts.cumul)charts.cumul.destroy(); const cd=S.cumulative.data; charts.cumul=new Chart(cu,{type:"line",data:{labels:cd.map(d=>d.label),datasets:[{data:cd.map(d=>d.cumulative),borderColor:"#3ddb7e",backgroundColor:"rgba(61,219,126,0.08)",borderWidth:2,fill:true,pointRadius:0,tension:0.3}]},options:{...cDef,scales:{...cDef.scales,y:{...cDef.scales.y,ticks:{...cDef.scales.y.ticks,callback:v=>"$"+v.toFixed(0)}}}}}); }
+  // Requests
+  const cr=$("#ch-req");
+  if(cr){ if(charts.req)charts.req.destroy(); charts.req=new Chart(cr,{type:"line",data:{labels:ts.map(tLabel),datasets:[{data:ts.map(d=>d.requests),borderColor:"#6eb5ff",backgroundColor:"rgba(110,181,255,0.07)",borderWidth:2,fill:true,pointRadius:0,tension:0.3}]},options:cDef}); }
+  // Hallucination
+  const ch=$("#ch-hal");
+  if(ch){ if(charts.hal)charts.hal.destroy(); charts.hal=new Chart(ch,{type:"line",data:{labels:ts.map(tLabel),datasets:[{data:ts.map(d=>d.avg_hallucination),borderColor:"#c084fc",backgroundColor:"rgba(192,132,252,0.07)",borderWidth:2,fill:true,pointRadius:0,tension:0.3}]},options:{...cDef,scales:{...cDef.scales,y:{...cDef.scales.y,min:0,max:1}}}}); }
+  // Drift
+  const cd2=$("#ch-dri");
+  if(cd2){ if(charts.dri)charts.dri.destroy(); charts.dri=new Chart(cd2,{type:"line",data:{labels:ts.map(tLabel),datasets:[{data:ts.map(d=>d.avg_drift),borderColor:"#22d3ee",backgroundColor:"rgba(34,211,238,0.07)",borderWidth:2,fill:true,pointRadius:0,tension:0.3}]},options:{...cDef,scales:{...cDef.scales,y:{...cDef.scales.y,min:0,max:1}}}}); }
+  // Model donut
+  const cm=$("#ch-mod");
+  if(cm&&S.overview?.models?.length){ if(charts.mod)charts.mod.destroy(); const m=S.overview.models; const cols=["#f0b429","#3ddb7e","#6eb5ff","#c084fc","#ff4d6d","#22d3ee"]; charts.mod=new Chart(cm,{type:"doughnut",data:{labels:m.map(x=>x.model),datasets:[{data:m.map(x=>x.cost),backgroundColor:m.map((_,i)=>cols[i%cols.length]+"44"),borderColor:m.map((_,i)=>cols[i%cols.length]),borderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,animation:false,cutout:"65%",plugins:{legend:{display:false},tooltip:cDef.plugins.tooltip}}}); }
+  // Cost trend (projection page) - now uses dynamic granularity
+  const cp=$("#ch-trend");
+  if(cp&&S.projection?.trend?.length){ if(charts.trend)charts.trend.destroy(); const dd=S.projection.trend; charts.trend=new Chart(cp,{type:"bar",data:{labels:dd.map(d=>d.label),datasets:[{data:dd.map(d=>d.cost),backgroundColor:"rgba(240,180,41,0.25)",borderColor:"#f0b429",borderWidth:1,borderRadius:1}]},options:{...cDef,plugins:{...cDef.plugins,title:{display:true,text:S.projection.granularity==="hourly"?"Hourly Cost":"Daily Cost",color:"#505050",font:{family:"'JetBrains Mono'",size:10},align:"start",padding:{bottom:8}}},scales:{...cDef.scales,y:{...cDef.scales.y,ticks:{...cDef.scales.y.ticks,callback:v=>"$"+v.toFixed(2)}}}}}); }
+}
+
+// Render
+function render(){
+  const app=$("#app"); app.innerHTML="";
+  if(S.loading&&!S.overview){ app.appendChild(el("div",{className:"loading"},el("div",{className:"spinner"}),el("div",{style:{fontSize:"16px",fontWeight:600}},"Connecting to AgentWatch..."),el("div",{className:"dim",style:{fontSize:"12px"}},"Backend: localhost:8100"),S.error?el("div",{className:"red",style:{fontSize:"12px"}},S.error):null)); return; }
+  const m=S.overview?.metrics||{};
+
+  // Topbar
+  const updatedStr=S.lastUpdated?S.lastUpdated.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"--:--:--";
+  app.appendChild(el("div",{className:"topbar"},
+    el("div",{className:"topbar-left"},el("div",{className:"topbar-logo"},el("img",{src:"assets/favicon-32.png",alt:"AgentWatch"})),el("div",null,el("div",{className:"topbar-title"},"AgentWatch"),el("div",{className:"topbar-sub"},"Claude Code Observability"))),
+    el("div",{className:"topbar-right"},
+      el("div",{className:"topbar-meta"},el("span",null,fT(m.total_tokens||0))," tokens \u00b7 ",el("span",null,(m.total_requests||0).toString())," reqs"),
+      el("div",{style:{display:"flex",alignItems:"center",gap:"8px"}},
+        el("div",{className:"last-updated"},"Updated "+updatedStr),
+        el("button",{className:"refresh-btn"+(S.refreshing?" spinning":""),onClick:()=>{S.refreshing=true;destroyCharts();render();fetchAll();}},el("span",{className:"refresh-icon"},"\u21BB"),S.refreshing?"...":"Refresh"),
+      ),
+      el("div",null,el("span",{className:"dot "+(S.error?"dead":"live")}),el("span",{style:{fontSize:"11px",color:"var(--text-dim)"}},S.error?"Offline":"Live"))
+    )
+  ));
+
+  // Tabs (no Alerts tab)
+  const tabs=[{id:"overview",l:"Overview"},{id:"savings",l:"Cost & Savings"},{id:"tools",l:"Tools"},{id:"patterns",l:"Activity"},{id:"sessions",l:"Sessions"},{id:"events",l:"Events"}];
+  app.appendChild(el("div",{className:"tabs"},...tabs.map(t=>el("button",{className:"tab"+(S.tab===t.id?" active":""),onClick:()=>{S.tab=t.id;S.replayId=null;destroyCharts();render();}},t.l))));
+
+  const ct=el("div",{className:"container"}); app.appendChild(ct);
+
+  // Time controls + date picker
+  const dateInput = el("input",{className:"date-input",type:"date",value:S.dateFilter||"",onChange:function(){
+    const val=this.value;
+    if(val){
+      S.dateFilter=val;
+      // Calculate hours from that date to now
+      const dayStart=new Date(val+"T00:00:00").getTime()/1000;
+      const now=Date.now()/1000;
+      S.hours=Math.max(1,Math.ceil((now-dayStart)/3600));
+      destroyCharts(); fetchAll();
+    }
+  }});
+  const clearDate = S.dateFilter ? el("button",{className:"time-btn",onClick:()=>{S.dateFilter=null;S.hours=720;destroyCharts();fetchAll();}},"Clear") : null;
+
+  ct.appendChild(el("div",{className:"controls"},
+    ...[{h:1,l:"1H"},{h:6,l:"6H"},{h:24,l:"24H"},{h:168,l:"7D"},{h:720,l:"30D"}].map(t=>el("button",{className:"time-btn"+(!S.dateFilter&&S.hours===t.h?" active":""),onClick:()=>{S.dateFilter=null;S.hours=t.h;destroyCharts();fetchAll();}},t.l)),
+    el("div",{className:"controls-spacer"}),
+    el("span",{style:{fontSize:"10px",color:"var(--text-dim)"}},"Jump to date:"),
+    dateInput,
+    clearDate,
+  ));
+
+  if(S.tab==="overview") renderOverview(ct,m);
+  else if(S.tab==="savings") renderSavings(ct);
+  else if(S.tab==="tools") renderTools(ct);
+  else if(S.tab==="patterns") renderPatterns(ct);
+  else if(S.tab==="sessions") S.replayId?renderReplay(ct):renderSessions(ct);
+  else if(S.tab==="events") renderEvents(ct);
+
+  requestAnimationFrame(renderCharts);
+}
+
+function renderOverview(ct,m){
+  // KPIs
+  ct.appendChild(el("div",{className:"kpi-row"},
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Est. API Cost"),el("div",{className:"kpi-value amber"},fC(m.total_cost||0)),el("div",{className:"kpi-sub"},"at API rates")),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Requests"),el("div",{className:"kpi-value"},(m.total_requests||0).toLocaleString()),el("div",{className:"kpi-sub"},((m.error_rate||0)*100).toFixed(1)+"% errors")),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Tokens"),el("div",{className:"kpi-value"},fT(m.total_tokens||0)),el("div",{className:"kpi-sub"},"in + out")),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Hallucination"),el("div",{className:"kpi-value "+sC(m.avg_hallucination_score)},(m.avg_hallucination_score||0).toFixed(3)),el("div",{className:"kpi-sub"},"avg (lower=better)")),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Drift"),el("div",{className:"kpi-value "+sC(m.avg_drift_score)},(m.avg_drift_score||0).toFixed(3)),el("div",{className:"kpi-sub"},"avg score")),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Sessions"),el("div",{className:"kpi-value"},(S.sessions?.sessions?.length||0).toString()),el("div",{className:"kpi-sub"},"tracked")),
+  ));
+
+  // Period comparison
+  if(S.comparison){
+    const c=S.comparison.current, p=S.comparison.previous, d=S.comparison.deltas;
+    ct.appendChild(el("div",{className:"section-label"},"vs Previous Period"));
+    ct.appendChild(el("div",{className:"compare-grid"},
+      ...[
+        {l:"Requests",cv:(c.requests||0).toLocaleString(),pv:(p.requests||0).toLocaleString(),d:d.requests},
+        {l:"Cost",cv:fC(c.cost||0),pv:fC(p.cost||0),d:d.cost},
+        {l:"Tokens",cv:fT(c.tokens||0),pv:fT(p.tokens||0),d:d.tokens},
+        {l:"Avg Hallucination",cv:(c.avg_hallucination||0).toFixed(3),pv:(p.avg_hallucination||0).toFixed(3),d:d.avg_hallucination},
+        {l:"Errors",cv:(c.errors||0).toString(),pv:(p.errors||0).toString(),d:d.errors},
+        {l:"Sessions",cv:(c.sessions||0).toString(),pv:(p.sessions||0).toString(),d:0},
+      ].map(x=>el("div",{className:"compare-card"},
+        el("div",{className:"compare-label"},x.l),
+        el("div",{className:"compare-values"},
+          el("span",{className:"compare-current"},x.cv),
+          el("span",{className:"compare-prev"},"was "+x.pv),
+        ),
+        x.d!==0?el("div",{style:{marginTop:"6px"}},el("span",{className:"delta "+deltaClass(x.d)},deltaStr(x.d))):null
+      ))
+    ));
+  }
+
+  // Charts: Cost + Cumulative
+  ct.appendChild(el("div",{className:"section-label"},"Usage Over Time"));
+  ct.appendChild(el("div",{className:"charts-grid g2"},
+    el("div",{className:"panel"},el("div",{className:"panel-title"},"Cost per Bucket"),el("div",{className:"chart-wrap",style:{height:"200px"}},el("canvas",{id:"ch-cost"}))),
+    el("div",{className:"panel"},el("div",{className:"panel-title"},"Cumulative Cost"),el("div",{className:"chart-wrap",style:{height:"200px"}},el("canvas",{id:"ch-cumulative"}))),
+  ));
+  ct.appendChild(el("div",{className:"charts-grid g2"},
+    el("div",{className:"panel"},el("div",{className:"panel-title"},"Requests"),el("div",{className:"chart-wrap",style:{height:"180px"}},el("canvas",{id:"ch-req"}))),
+    el("div",{className:"panel"},el("div",{className:"panel-title"},"Hallucination Risk"),el("div",{className:"chart-wrap",style:{height:"180px"}},el("canvas",{id:"ch-hal"}))),
+  ));
+
+  // Model breakdown
+  ct.appendChild(el("div",{className:"section-label"},"Model Breakdown"));
+  const models=S.overview?.models||[];
+  const cols=["#f0b429","#3ddb7e","#6eb5ff","#c084fc","#ff4d6d","#22d3ee"];
+  ct.appendChild(el("div",{className:"charts-grid g3"},
+    el("div",{className:"panel"},el("div",{className:"panel-title"},"Cost by Model"),el("div",{className:"chart-wrap",style:{height:"200px"}},el("canvas",{id:"ch-mod"})),
+      el("div",{style:{marginTop:"12px"}},...models.map((mod,i)=>el("div",{style:{display:"flex",alignItems:"center",gap:"8px",padding:"3px 0",fontSize:"11px"}},el("div",{style:{width:"8px",height:"8px",borderRadius:"2px",background:cols[i%cols.length]}}),el("span",{className:"dim",style:{flex:"1"}},mod.model),el("span",{className:"bold"},fC(mod.cost)),el("span",{className:"dim"}," \u00b7 "+mod.requests+" reqs"))))
+    ),
+    el("div",{className:"panel"},
+      el("div",{className:"panel-title"},"Per-Project Cost"),
+      ...renderProjectMini()
+    ),
+  ));
+}
+
+function renderProjectMini(){
+  const projects={};
+  S.events.forEach(ev=>{
+    const p=ev.project_id||"unknown";
+    if(!projects[p])projects[p]={cost:0,reqs:0};
+    projects[p].cost+=ev.total_cost||0;
+    projects[p].reqs++;
+  });
+  const sorted=Object.entries(projects).sort((a,b)=>b[1].cost-a[1].cost);
+  if(!sorted.length) return [el("div",{className:"empty"},"No data")];
+  return sorted.slice(0,8).map(([p,d])=>el("div",{style:{display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:"11px",borderBottom:"1px solid var(--border)"}},el("span",{className:"amber"},p.replace("claude-code:","")),el("span",null,el("span",{className:"bold"},fC(d.cost)),el("span",{className:"dim"}," \u00b7 "+d.reqs))));
+}
+
+function renderShareCard(ct){
+  const ss=S.shareStats;
+  if(!ss) return;
+  const card=el("div",{className:"share-card",id:"share-card-el"},
+    el("div",{className:"share-card-header"},
+      el("div",null,
+        el("div",{className:"share-card-title"},"My Claude Max Stats"),
+        el("div",{className:"share-card-period"},ss.period_days+" days tracked"),
+      ),
+      el("button",{className:"share-btn",onClick:exportShareCard},"Copy as Image"),
+    ),
+    el("div",{className:"share-card-grid"},
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value amber"},"$"+ss.total_cost.toFixed(0)),el("div",{className:"share-card-stat-label"},"API Value Used")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value green"},"$"+ss.savings.toFixed(0)),el("div",{className:"share-card-stat-label"},"Monthly Savings")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value"},fT(ss.total_tokens)),el("div",{className:"share-card-stat-label"},"Total Tokens")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value"},ss.total_requests.toLocaleString()),el("div",{className:"share-card-stat-label"},"LLM Calls")),
+    ),
+    el("div",{className:"share-card-grid",style:{marginTop:"16px"}},
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value",style:{fontSize:"18px"}},ss.top_model.replace("claude-","").replace("claude-","")),el("div",{className:"share-card-stat-label"},"Top Model")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value",style:{fontSize:"18px"}},ss.top_project),el("div",{className:"share-card-stat-label"},"Top Project")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value",style:{fontSize:"18px"}},ss.sessions.toString()),el("div",{className:"share-card-stat-label"},"Sessions")),
+      el("div",{className:"share-card-stat"},el("div",{className:"share-card-stat-value",style:{fontSize:"18px"}},ss.unique_tools.toString()),el("div",{className:"share-card-stat-label"},"Tools Used")),
+    ),
+    el("div",{className:"share-card-footer"},
+      el("div",{className:"share-card-brand"},"AgentWatch \u00b7 zmaxgong/agentwatch"),
+      el("div",{style:{fontSize:"11px",color:"var(--text-dim)"}},ss.savings_pct>0?ss.savings_pct+"% cheaper than API":""),
+    ),
+  );
+  ct.appendChild(card);
+}
+
+async function exportShareCard(){
+  // Render share card to canvas and copy to clipboard
+  const card=document.getElementById("share-card-el");
+  if(!card) return;
+  try{
+    // Use html2canvas-like approach with Canvas API
+    const ss=S.shareStats;
+    const W=800,H=420;
+    const canvas=document.createElement("canvas");
+    canvas.width=W*2; canvas.height=H*2; // 2x for retina
+    const ctx=canvas.getContext("2d");
+    ctx.scale(2,2);
+
+    // Background
+    ctx.fillStyle="#0a0a0a";
+    ctx.fillRect(0,0,W,H);
+    // Border
+    ctx.strokeStyle="#f0b429"; ctx.lineWidth=2;
+    ctx.strokeRect(1,1,W-2,H-2);
+    // Glow
+    const g=ctx.createRadialGradient(W*0.8,0,0,W*0.8,0,W*0.5);
+    g.addColorStop(0,"rgba(240,180,41,0.08)"); g.addColorStop(1,"transparent");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    ctx.textBaseline="top";
+    // Title
+    ctx.fillStyle="#c8c8c8"; ctx.font="bold 24px 'JetBrains Mono',monospace";
+    ctx.fillText("My Claude Max Stats",32,28);
+    ctx.fillStyle="#505050"; ctx.font="12px 'JetBrains Mono',monospace";
+    ctx.fillText(ss.period_days+" days tracked",32,58);
+
+    // Row 1: big stats
+    const r1y=100;
+    const stats1=[
+      {v:"$"+ss.total_cost.toFixed(0),l:"API Value Used",c:"#f0b429"},
+      {v:"$"+ss.savings.toFixed(0),l:"Monthly Savings",c:"#3ddb7e"},
+      {v:fT(ss.total_tokens),l:"Total Tokens",c:"#c8c8c8"},
+      {v:ss.total_requests.toLocaleString(),l:"LLM Calls",c:"#c8c8c8"},
+    ];
+    stats1.forEach((s,i)=>{
+      const x=32+i*190;
+      ctx.fillStyle=s.c; ctx.font="bold 32px 'JetBrains Mono',monospace";
+      ctx.fillText(s.v,x,r1y);
+      ctx.fillStyle="#505050"; ctx.font="10px 'JetBrains Mono',monospace";
+      ctx.fillText(s.l.toUpperCase(),x,r1y+40);
+    });
+
+    // Row 2: details
+    const r2y=200;
+    const stats2=[
+      {v:ss.top_model.replace("claude-",""),l:"Top Model"},
+      {v:ss.top_project,l:"Top Project"},
+      {v:ss.sessions.toString(),l:"Sessions"},
+      {v:ss.unique_tools.toString(),l:"Tools Used"},
+    ];
+    stats2.forEach((s,i)=>{
+      const x=32+i*190;
+      ctx.fillStyle="#888"; ctx.font="bold 20px 'JetBrains Mono',monospace";
+      ctx.fillText(s.v,x,r2y);
+      ctx.fillStyle="#505050"; ctx.font="10px 'JetBrains Mono',monospace";
+      ctx.fillText(s.l.toUpperCase(),x,r2y+28);
+    });
+
+    // Divider
+    ctx.strokeStyle="#1e1e1e"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(32,300); ctx.lineTo(W-32,300); ctx.stroke();
+
+    // Footer
+    ctx.fillStyle="#505050"; ctx.font="12px 'JetBrains Mono',monospace";
+    ctx.fillText("AgentWatch \u00b7 github.com/zmaxgong/agentwatch",32,320);
+    if(ss.savings_pct>0){
+      ctx.fillStyle="#3ddb7e"; ctx.font="bold 14px 'JetBrains Mono',monospace";
+      ctx.fillText(ss.savings_pct+"% cheaper than API",32,348);
+    }
+
+    // Branding
+    ctx.fillStyle="#1e1e1e"; ctx.font="11px 'JetBrains Mono',monospace";
+    ctx.fillText("100% local \u00b7 your data never leaves your machine",32,380);
+
+    canvas.toBlob(async(blob)=>{
+      try{
+        await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+        alert("Stats card copied to clipboard! Paste it anywhere.");
+      }catch(e){
+        // Fallback: download
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(blob);
+        a.download="agentwatch-stats.png";
+        a.click();
+      }
+    },"image/png");
+  }catch(e){ console.error("Export failed:",e); alert("Export failed. Try downloading instead."); }
+}
+
+function renderCacheEfficiency(ct){
+  const c=S.cache;
+  if(!c||c.total_events===0) return;
+
+  ct.appendChild(el("div",{className:"section-label"},"Prompt Cache Efficiency"));
+  ct.appendChild(el("div",{className:"cache-grid"},
+    el("div",{className:"cache-card"},
+      el("div",{className:"cache-label"},"Cache Hit Rate"),
+      el("div",{className:"cache-value cyan"},c.cache_hit_rate.toFixed(1)+"%"),
+      el("div",{className:"cache-bar"},el("div",{className:"cache-fill",style:{width:Math.min(c.cache_hit_rate,100)+"%"}})),
+    ),
+    el("div",{className:"cache-card"},
+      el("div",{className:"cache-label"},"Tokens from Cache"),
+      el("div",{className:"cache-value"},fT(c.cache_read_tokens)),
+      el("div",{style:{fontSize:"10px",color:"var(--text-dim)",marginTop:"4px"}},"vs "+fT(c.total_input_tokens)+" total input"),
+    ),
+    el("div",{className:"cache-card"},
+      el("div",{className:"cache-label"},"Cache Writes"),
+      el("div",{className:"cache-value"},fT(c.cache_write_tokens)),
+      el("div",{style:{fontSize:"10px",color:"var(--text-dim)",marginTop:"4px"}},c.events_with_cache+" of "+c.total_events+" events"),
+    ),
+    el("div",{className:"cache-card"},
+      el("div",{className:"cache-label"},"Est. Cache Savings"),
+      el("div",{className:"cache-value green"},fC(c.estimated_cache_savings)),
+      el("div",{style:{fontSize:"10px",color:"var(--text-dim)",marginTop:"4px"}},"from cache reads at 90% discount"),
+    ),
+  ));
+}
+
+function renderSavings(ct){
+  const p=S.projection;
+  if(!p){ ct.appendChild(el("div",{className:"empty"},"Loading...")); return; }
+
+  // Shareable stats card
+  renderShareCard(ct);
+
+  // Cache efficiency
+  renderCacheEfficiency(ct);
+
+  // Big savings card
+  ct.appendChild(el("div",{className:"section-label"},"Claude Max Savings Calculator"));
+  ct.appendChild(el("div",{className:"savings-card"},
+    el("div",{className:"savings-item"},el("div",{className:"savings-label"},"Monthly Projected"),el("div",{className:"savings-value amber"},"$"+p.monthly_projected.toFixed(2)),el("div",{className:"savings-sub"},"at API rates")),
+    el("div",{className:"savings-item"},el("div",{className:"savings-label"},"Subscription Cost"),el("div",{className:"savings-value"},"$"+p.subscription_cost.toFixed(0)),el("div",{className:"savings-sub"},"Claude Max / month")),
+    el("div",{className:"savings-item"},el("div",{className:"savings-label"},"You Save"),el("div",{className:"savings-value green"},"$"+p.savings.toFixed(2)),el("div",{className:"savings-sub"},p.savings_pct.toFixed(0)+"% savings")),
+    el("div",{className:"savings-item"},el("div",{className:"savings-label"},"Daily Average"),el("div",{className:"savings-value"},"$"+p.daily_avg.toFixed(2)),el("div",{className:"savings-sub"},"over "+p.span_days.toFixed(0)+" days")),
+  ));
+
+  // 5h billing window from backend
+  if(S.billing){
+    const bw=S.billing;
+    ct.appendChild(el("div",{className:"section-label"},"5-Hour Rolling Window (Claude Max)"));
+    const pct=Math.min((bw.requests/50)*100,100); // rough gauge: 50 requests as reference
+    const bc=pct<50?"safe":pct<80?"warn":"danger";
+    ct.appendChild(el("div",{className:"billing-window"},
+      el("div",{className:"billing-header"},el("div",{className:"billing-title"},"Current 5h Window"),el("div",{style:{fontSize:"12px",color:"var(--amber)",fontWeight:600}},bw.requests+" requests")),
+      el("div",{className:"billing-bar"},el("div",{className:"billing-fill "+bc,style:{width:pct+"%"}})),
+      el("div",{className:"billing-stats"},
+        el("span",null,fC(bw.cost)+" est. cost"),
+        el("span",null,fT(bw.tokens)+" tokens"),
+        el("span",null,fT(bw.input_tokens)+" in / "+fT(bw.output_tokens)+" out"),
+      ),
+    ));
+  }
+
+  // Cost trend chart (now dynamic: hourly or daily)
+  ct.appendChild(el("div",{className:"section-label"},"Cost Trend ("+(p.granularity||"daily")+")"));
+  ct.appendChild(el("div",{className:"panel"},el("div",{className:"chart-wrap",style:{height:"220px"}},el("canvas",{id:"ch-trend"}))));
+
+  // Model cost table
+  if(p.model_costs?.length){
+    ct.appendChild(el("div",{className:"section-label"},"Cost by Model"));
+    const total=p.model_costs.reduce((s,m)=>s+m.cost,0);
+    ct.appendChild(el("table",{className:"data-table"},
+      el("thead",null,el("tr",null,el("th",null,"Model"),el("th",{className:"r"},"Cost"),el("th",{className:"r"},"% of Total"),el("th",{className:"r"},"Requests"),el("th",{className:"r"},"$/Request"))),
+      el("tbody",null,...p.model_costs.map(m=>el("tr",null,
+        el("td",null,el("span",{className:"amber bold"},m.model)),
+        el("td",{className:"r bold"},fC(m.cost)),
+        el("td",{className:"r"},(total>0?((m.cost/total)*100).toFixed(1):"0")+"%"),
+        el("td",{className:"r"},m.requests.toLocaleString()),
+        el("td",{className:"r dim"},m.requests>0?fC(m.cost/m.requests):"-"),
+      )))
+    ));
+  }
+}
+
+function renderTools(ct){
+  const t=S.tools;
+  if(!t||!t.tools?.length){ ct.appendChild(el("div",{className:"empty"},"No tool data yet.")); return; }
+
+  // Percentage summary for non-technical users
+  const totalCalls=t.tools.reduce((s,x)=>s+x.count,0);
+  if(totalCalls>0){
+    ct.appendChild(el("div",{className:"section-label"},"At a Glance"));
+    const topTools=t.tools.slice(0,5);
+    const summaryPanel=el("div",{className:"panel",style:{padding:"16px 20px",display:"flex",gap:"20px",flexWrap:"wrap",justifyContent:"center"}});
+    topTools.forEach(tool=>{
+      const pct=((tool.count/totalCalls)*100).toFixed(0);
+      const color=TOOL_COLORS[tool.tool_name]||"var(--text-mid)";
+      summaryPanel.appendChild(el("div",{style:{textAlign:"center",minWidth:"100px"}},
+        el("div",{style:{fontSize:"28px",fontWeight:"700",color:color}},pct+"%"),
+        el("div",{style:{fontSize:"11px",color:"var(--text-mid)",marginTop:"2px"}},tool.tool_name),
+        el("div",{style:{fontSize:"10px",color:"var(--text-dim)"}},tool.count+" calls"),
+      ));
+    });
+    ct.appendChild(summaryPanel);
+  }
+
+  ct.appendChild(el("div",{className:"section-label"},"Tool Usage Breakdown"));
+  const maxCount=t.tools[0]?.count||1;
+  const toolPanel=el("div",{className:"panel",style:{padding:"16px 16px 8px"}});
+  t.tools.slice(0,20).forEach(tool=>{
+    const pct=Math.max((tool.count/maxCount)*100,3);
+    const color=TOOL_COLORS[tool.tool_name]||"var(--text-mid)";
+    toolPanel.appendChild(el("div",{className:"tool-bar-row"},
+      el("div",{className:"tool-bar-name"},tool.tool_name),
+      el("div",{className:"tool-bar-track"},el("div",{className:"tool-bar-fill",style:{width:pct+"%",background:color}},tool.count>10?tool.count.toString():"")),
+      el("div",{className:"tool-bar-count"},tool.count+"x"),
+    ));
+  });
+  ct.appendChild(toolPanel);
+
+  if(t.by_project?.length){
+    ct.appendChild(el("div",{className:"section-label"},"Tools by Project"));
+    const grouped={};
+    t.by_project.forEach(r=>{
+      const p=r.project_id.replace("claude-code:","");
+      if(!grouped[p])grouped[p]={};
+      grouped[p][r.tool_name]=(grouped[p][r.tool_name]||0)+r.count;
+    });
+    const table=el("table",{className:"data-table"},
+      el("thead",null,el("tr",null,el("th",null,"Project"),el("th",{className:"r"},"Total"),el("th",null,"Top Tools"))),
+      el("tbody",null,...Object.entries(grouped).sort((a,b)=>{
+        const ta=Object.values(a[1]).reduce((s,v)=>s+v,0), tb=Object.values(b[1]).reduce((s,v)=>s+v,0);
+        return tb-ta;
+      }).slice(0,15).map(([proj,tools])=>{
+        const total=Object.values(tools).reduce((s,v)=>s+v,0);
+        const top3=Object.entries(tools).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,c])=>n+":"+c).join(", ");
+        return el("tr",null,el("td",null,el("span",{className:"amber"},proj)),el("td",{className:"r bold"},total.toString()),el("td",{className:"dim"},top3));
+      }))
+    );
+    ct.appendChild(table);
+  }
+}
+
+function renderSessions(ct){
+  const ss=S.sessions?.sessions;
+  if(!ss?.length){ ct.appendChild(el("div",{className:"empty"},"No sessions found.")); return; }
+
+  ct.appendChild(el("div",{className:"section-label"},"Sessions (click to replay)"));
+
+  // Filter row
+  const filterInput=el("input",{className:"filter-input",type:"text",placeholder:"Filter by project...",value:S.sessionFilter,onInput:function(){S.sessionFilter=this.value;render();}});
+  ct.appendChild(el("div",{className:"filter-row"},filterInput));
+
+  // Filter sessions
+  let filtered=ss;
+  if(S.sessionFilter){
+    const q=S.sessionFilter.toLowerCase();
+    filtered=ss.filter(s=>(s.project_id||"").toLowerCase().includes(q)||(s.session_id||"").toLowerCase().includes(q));
+  }
+
+  // Sort sessions
+  const sc=S.sessionSort;
+  filtered=[...filtered].sort((a,b)=>{
+    let va=a[sc.col], vb=b[sc.col];
+    if(typeof va==="string") va=va.toLowerCase();
+    if(typeof vb==="string") vb=vb.toLowerCase();
+    if(va<vb)return sc.dir==="asc"?-1:1;
+    if(va>vb)return sc.dir==="asc"?1:-1;
+    return 0;
+  });
+
+  function th(label,col,right){
+    const sorted=sc.col===col;
+    return el("th",{className:(right?"r":"")+(sorted?" sorted":""),onClick:()=>toggleSort(col,S.sessionSort)},label,sorted?el("span",{className:"sort-arrow"},sortArrow(col,sc)):"");
+  }
+
+  ct.appendChild(el("table",{className:"data-table"},
+    el("thead",null,el("tr",null,
+      th("Project","project_id"),th("Session","session_id"),th("LLM Calls","llm_calls",true),th("Tool Calls","tool_calls",true),th("Cost","cost",true),th("Tokens","tokens",true),th("Duration","ended"),th("Last Active","ended"),
+    )),
+    el("tbody",null,...filtered.map(s=>{
+      const dur=s.ended-s.started;
+      const durStr=dur<60?"<1m":dur<3600?Math.floor(dur/60)+"m":Math.floor(dur/3600)+"h "+Math.floor((dur%3600)/60)+"m";
+      return el("tr",{className:"clickable",onClick:()=>{fetchReplay(s.session_id);}},
+        el("td",null,el("span",{className:"amber"},(s.project_id||"").replace("claude-code:",""))),
+        el("td",{className:"dim"},s.session_id.slice(0,8)+"..."),
+        el("td",{className:"r bold"},s.llm_calls.toString()),
+        el("td",{className:"r"},s.tool_calls.toString()),
+        el("td",{className:"r bold"},fC(s.cost)),
+        el("td",{className:"r"},fT(s.tokens)),
+        el("td",{className:"dim"},durStr),
+        el("td",{className:"dim"},tA(s.ended)),
+      );
+    }))
+  ));
+}
+
+function renderReplay(ct){
+  ct.appendChild(el("button",{className:"back-btn",onClick:()=>{S.replayId=null;render();}},"\u2190 Back to Sessions"));
+  if(!S.replayData){ ct.appendChild(el("div",{className:"loading",style:{minHeight:"200px"}},el("div",{className:"spinner"}))); return; }
+
+  const evts=S.replayData.events||[];
+  const llmEvts=evts.filter(e=>e.event_type==="llm_response");
+  const toolEvts=evts.filter(e=>e.event_type==="tool_call");
+  const totalCost=llmEvts.reduce((s,e)=>s+(e.total_cost||0),0);
+
+  ct.appendChild(el("div",{className:"section-label"},"Session Replay: "+S.replayId.slice(0,8)));
+  ct.appendChild(el("div",{className:"kpi-row"},
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"LLM Calls"),el("div",{className:"kpi-value"},llmEvts.length.toString())),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Tool Calls"),el("div",{className:"kpi-value"},toolEvts.length.toString())),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Session Cost"),el("div",{className:"kpi-value amber"},fC(totalCost))),
+    el("div",{className:"kpi"},el("div",{className:"kpi-label"},"Models"),el("div",{className:"kpi-value"},[...new Set(llmEvts.map(e=>e.model))].length.toString())),
+  ));
+
+  const timeline=el("div",{className:"panel",style:{maxHeight:"600px",overflowY:"auto",padding:"12px 16px"}});
+  evts.forEach(ev=>{
+    const type=ev.event_type;
+    let cls="llm", label="", detail="", costStr="";
+    if(type==="llm_response"){
+      cls="llm"; label=ev.model||"LLM";
+      detail=fT(ev.total_tokens||0)+" tokens";
+      if(ev.hallucination_score!=null) detail+=" \u00b7 hal:"+ev.hallucination_score.toFixed(3);
+      costStr=fC(ev.total_cost||0);
+    }else if(type==="tool_call"){
+      cls="tool"; label=ev.tool_name||"tool"; detail="";
+    }else if(type.includes("alert")||type.includes("detected")){
+      cls="alert"; label=type.replace(/_/g," "); detail="";
+    }else{
+      cls=""; label=type; detail="";
+    }
+    timeline.appendChild(el("div",{className:"replay-event "+cls},
+      el("div",{className:"replay-time"},tA(ev.timestamp)),
+      el("div",{className:"replay-content"},el("div",{className:"replay-label "+(cls==="llm"?"amber":cls==="tool"?"blue":"red")},label),detail?el("div",{className:"replay-detail"},detail):null),
+      costStr?el("div",{className:"replay-cost amber"},costStr):el("div",{className:"replay-cost"}),
+    ));
+  });
+  ct.appendChild(timeline);
+}
+
+function renderPatterns(ct){
+  const p=S.patterns;
+  if(!p){ ct.appendChild(el("div",{className:"empty"},"Loading patterns...")); return; }
+
+  // Hour of day heatmap
+  ct.appendChild(el("div",{className:"section-label"},"When You Work with AI"));
+  ct.appendChild(el("div",{className:"pattern-grid"},
+    // Hour of day
+    el("div",{className:"panel"},
+      el("div",{className:"panel-title"},"Requests by Hour of Day"),
+      ...renderHourlyHeatmap(p.hourly),
+    ),
+    // Day of week
+    el("div",{className:"panel"},
+      el("div",{className:"panel-title"},"Requests by Day of Week"),
+      ...renderDayBars(p.daily),
+    ),
+  ));
+
+  // Cost breakdown by time
+  ct.appendChild(el("div",{className:"pattern-grid"},
+    el("div",{className:"panel"},
+      el("div",{className:"panel-title"},"Cost by Hour of Day"),
+      ...renderHourlyCostBars(p.hourly),
+    ),
+    el("div",{className:"panel"},
+      el("div",{className:"panel-title"},"Cost by Day of Week"),
+      ...renderDayCostBars(p.daily),
+    ),
+  ));
+
+  // Tool usage percentage
+  if(S.tools?.tools?.length){
+    ct.appendChild(el("div",{className:"section-label"},"What Your AI Agent Does"));
+    const total=S.tools.tools.reduce((s,t)=>s+t.count,0);
+    const categories={
+      "Reading Code":["Read","Grep","Glob","ToolSearch"],
+      "Writing Code":["Edit","Write","NotebookEdit"],
+      "Running Commands":["Bash"],
+      "Thinking & Planning":["Agent","TodoWrite"],
+      "Other":[]
+    };
+    const catCounts={};
+    S.tools.tools.forEach(t=>{
+      let found=false;
+      for(const[cat,tools] of Object.entries(categories)){
+        if(cat==="Other") continue;
+        if(tools.includes(t.tool_name)){ catCounts[cat]=(catCounts[cat]||0)+t.count; found=true; break; }
+      }
+      if(!found) catCounts["Other"]=(catCounts["Other"]||0)+t.count;
+    });
+    const catColors={"Reading Code":"#6eb5ff","Writing Code":"#3ddb7e","Running Commands":"#f0b429","Thinking & Planning":"#c084fc","Other":"#888"};
+    const sorted=Object.entries(catCounts).sort((a,b)=>b[1]-a[1]);
+    const catPanel=el("div",{className:"panel",style:{padding:"20px"}});
+    sorted.forEach(([cat,count])=>{
+      const pct=((count/total)*100).toFixed(1);
+      const color=catColors[cat]||"#888";
+      catPanel.appendChild(el("div",{style:{display:"flex",alignItems:"center",gap:"12px",padding:"8px 0"}},
+        el("div",{style:{width:"140px",fontSize:"12px",color:"var(--text-mid)",textAlign:"right"}},cat),
+        el("div",{style:{flex:"1",height:"28px",background:"var(--panel-2)",borderRadius:"3px",overflow:"hidden"}},
+          el("div",{style:{height:"100%",width:pct+"%",background:color,borderRadius:"3px",display:"flex",alignItems:"center",paddingLeft:"10px",fontSize:"12px",fontWeight:"700",color:"#0a0a0a",minWidth:"40px"}},pct+"%")
+        ),
+        el("div",{style:{width:"60px",textAlign:"right",fontSize:"12px",fontWeight:"600"}},count.toLocaleString()),
+      ));
+    });
+    ct.appendChild(catPanel);
+  }
+}
+
+function renderHourlyHeatmap(hourly){
+  if(!hourly?.length) return [el("div",{className:"empty"},"No data")];
+  // Build full 24h array
+  const data=new Array(24).fill(0);
+  hourly.forEach(h=>{ data[h.hour]=h.requests; });
+  const max=Math.max(...data,1);
+  const grid=el("div",{className:"heatmap-grid"});
+  data.forEach((v,i)=>{
+    const intensity=v/max;
+    const bg=v===0?"var(--panel-2)":`rgba(240,180,41,${0.15+intensity*0.85})`;
+    grid.appendChild(el("div",{className:"heatmap-cell","data-tip":i+":00 - "+v+" requests",style:{background:bg,borderRadius:"3px"}}));
+  });
+  const labels=el("div",{className:"heatmap-labels"});
+  for(let i=0;i<24;i++){
+    labels.appendChild(el("div",{className:"heatmap-label"},i%3===0?i.toString():""));
+  }
+  return [grid,labels];
+}
+
+function renderHourlyCostBars(hourly){
+  if(!hourly?.length) return [el("div",{className:"empty"},"No data")];
+  const data=new Array(24).fill(0);
+  hourly.forEach(h=>{ data[h.hour]=h.cost; });
+  const max=Math.max(...data,0.01);
+  const wrap=el("div");
+  data.forEach((v,i)=>{
+    if(v===0) return;
+    const pct=Math.max((v/max)*100,3);
+    wrap.appendChild(el("div",{style:{display:"flex",alignItems:"center",gap:"6px",padding:"2px 0",fontSize:"10px"}},
+      el("div",{style:{width:"30px",textAlign:"right",color:"var(--text-dim)"}},i+":00"),
+      el("div",{style:{flex:"1",height:"14px",background:"var(--panel-2)",borderRadius:"2px",overflow:"hidden"}},
+        el("div",{style:{height:"100%",width:pct+"%",background:"rgba(240,180,41,0.5)",borderRadius:"2px"}})),
+      el("div",{style:{width:"50px",textAlign:"right",fontWeight:"600"}},fC(v)),
+    ));
+  });
+  return [wrap];
+}
+
+function renderDayBars(daily){
+  if(!daily?.length) return [el("div",{className:"empty"},"No data")];
+  const max=Math.max(...daily.map(d=>d.requests),1);
+  const dayColors=["#505050","#f0b429","#f0b429","#f0b429","#f0b429","#f0b429","#505050"];
+  return daily.map(d=>{
+    const pct=Math.max((d.requests/max)*100,3);
+    return el("div",{className:"day-bar-row"},
+      el("div",{className:"day-bar-name"},d.label),
+      el("div",{className:"day-bar-track"},el("div",{className:"day-bar-fill",style:{width:pct+"%",background:dayColors[d.dow]||"var(--amber)"}},d.requests>5?d.requests.toString():"")),
+      el("div",{className:"day-bar-count"},d.requests+" reqs"),
+    );
+  });
+}
+
+function renderDayCostBars(daily){
+  if(!daily?.length) return [el("div",{className:"empty"},"No data")];
+  const max=Math.max(...daily.map(d=>d.cost),0.01);
+  return daily.map(d=>{
+    const pct=Math.max((d.cost/max)*100,3);
+    return el("div",{className:"day-bar-row"},
+      el("div",{className:"day-bar-name"},d.label),
+      el("div",{className:"day-bar-track"},el("div",{className:"day-bar-fill",style:{width:pct+"%",background:"rgba(61,219,126,0.6)"}})),
+      el("div",{className:"day-bar-count"},fC(d.cost)),
+    );
+  });
+}
+
+function renderEvents(ct){
+  ct.appendChild(el("div",{className:"section-label"},"Event Log"));
+
+  // Filters
+  const types=[...new Set(S.events.map(e=>e.event_type))].sort();
+  const typeSelect=el("select",{className:"filter-select",onChange:function(){S.eventTypeFilter=this.value;render();}},
+    el("option",{value:""},"All Types"),
+    ...types.map(t=>el("option",{value:t,selected:S.eventTypeFilter===t?true:undefined},t.replace(/_/g," ")))
+  );
+  ct.appendChild(el("div",{className:"filter-row"},typeSelect));
+
+  // Filter
+  let evts=S.events;
+  if(S.eventTypeFilter) evts=evts.filter(e=>e.event_type===S.eventTypeFilter);
+
+  // Sort
+  const sc=S.eventSort;
+  evts=[...evts].sort((a,b)=>{
+    let va=a[sc.col]||0, vb=b[sc.col]||0;
+    if(typeof va==="string") va=va.toLowerCase();
+    if(typeof vb==="string") vb=vb.toLowerCase();
+    if(va<vb)return sc.dir==="asc"?-1:1;
+    if(va>vb)return sc.dir==="asc"?1:-1;
+    return 0;
+  });
+
+  function th(label,col,right){
+    const sorted=sc.col===col;
+    return el("th",{className:(right?"r":"")+(sorted?" sorted":""),onClick:()=>toggleSort(col,S.eventSort)},label,sorted?el("span",{className:"sort-arrow"},sortArrow(col,sc)):"");
+  }
+
+  const panel=el("div",{style:{maxHeight:"600px",overflowY:"auto"}});
+  panel.appendChild(el("table",{className:"data-table"},
+    el("thead",null,el("tr",null,
+      th("Time","timestamp"),th("Type","event_type"),th("Model","model"),th("Tokens","total_tokens",true),th("Cost","total_cost",true),th("Latency","latency_ms",true),th("Halluc.","hallucination_score",true),th("Status","error_type"),
+    )),
+    el("tbody",null,...evts.slice(0,200).map(ev=>{
+      const err=!!ev.error_type;
+      return el("tr",{style:err?{background:"rgba(255,77,109,0.04)"}:{}},
+        el("td",{className:"dim"},tA(ev.timestamp)),
+        el("td",{className:"amber"},(ev.event_type||"").replace("llm_","").replace(/_/g," ")),
+        el("td",{className:"dim"},ev.model||ev.tool_name||"-"),
+        el("td",{className:"r"},ev.total_tokens?fT(ev.total_tokens):"-"),
+        el("td",{className:"r bold"},ev.total_cost?fC(ev.total_cost):"-"),
+        el("td",{className:"r"},ev.latency_ms?fL(ev.latency_ms):"-"),
+        el("td",{className:ev.hallucination_score!=null?sC(ev.hallucination_score)+" bold":"dim"},ev.hallucination_score!=null?ev.hallucination_score.toFixed(3):"-"),
+        el("td",{className:err?"red bold":"green"},err?"ERR":"OK"),
+      );
+    }))
+  ));
+  ct.appendChild(panel);
+}
+
+// Init
+fetchAll();
+setInterval(fetchAll,POLL);
+</script>
+</body>
+</html>
