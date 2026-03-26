@@ -6,9 +6,9 @@ Shows how to use AgentWatch without the wrapper — useful for
 custom agents, multi-model setups, or non-Anthropic providers.
 """
 
-import sys
 import os
-import time
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdk"))
 
 from agentwatch import AgentWatch, AgentWatchConfig
@@ -53,7 +53,11 @@ def main():
         messages=[
             {"role": "user", "content": "Summarize these findings in bullet points"},
         ],
-        response_text="- Revenue up 23%\n- Operating margin improved to 18%\n- Customer growth at 15%",
+        response_text=(
+            "- Revenue up 23%\n"
+            "- Operating margin improved to 18%\n"
+            "- Customer growth at 15%"
+        ),
         input_tokens=1200,
         output_tokens=350,
         latency_ms=890.3,

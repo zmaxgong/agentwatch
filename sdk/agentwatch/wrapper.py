@@ -26,9 +26,14 @@ Usage:
     )
 """
 
-import time
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
+import time
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from agentwatch.client import AgentWatch
 
 logger = logging.getLogger("agentwatch")
 

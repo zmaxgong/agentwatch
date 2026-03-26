@@ -1,19 +1,23 @@
 """Core AgentWatch client for collecting and shipping telemetry."""
 
 import json
-import time
-import threading
 import logging
+import threading
+import time
 import uuid
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .config import AgentWatchConfig, MODEL_PRICING
+from .config import MODEL_PRICING, AgentWatchConfig
+from .detectors import DriftDetector, HallucinationDetector, SecurityDetector
 from .events import (
-    Event, EventType, TokenUsage, CostBreakdown,
-    AlertSeverity, SecurityFlag,
+    AlertSeverity,
+    CostBreakdown,
+    Event,
+    EventType,
+    SecurityFlag,
+    TokenUsage,
 )
-from .detectors import SecurityDetector, HallucinationDetector, DriftDetector
 
 logger = logging.getLogger("agentwatch")
 

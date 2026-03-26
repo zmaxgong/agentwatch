@@ -1,12 +1,16 @@
 """Setup for AgentWatch SDK."""
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="agentwatch",
     version="0.1.0",
-    description="Observability SDK for AI agents — monitor cost, hallucinations, security, and drift",
-    long_description=open("../README.md").read() if __import__("os").path.exists("../README.md") else "",
+    description="Observability SDK for AI agents",
+    long_description=(
+        open("../README.md").read()
+        if __import__("os").path.exists("../README.md")
+        else ""
+    ),
     long_description_content_type="text/markdown",
     author="Tandm Labs",
     author_email="hello@tandmlabs.com",

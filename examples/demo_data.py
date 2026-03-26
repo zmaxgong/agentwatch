@@ -14,8 +14,8 @@ import json
 import math
 import random
 import time
-import uuid
 import urllib.request
+import uuid
 from typing import Dict, List, Tuple
 
 # --- Realistic Claude Code simulation ---
@@ -119,7 +119,7 @@ def generate_events(
     # Track running cost to hit target
     running_cost = 0.0
     target_monthly = 5200.0  # Target ~$5200 at API rates over 30 days
-    target_per_event = target_monthly / num_events
+    _ = target_monthly / num_events  # per-event target (unused)
 
     for i in range(num_events):
         session = random.choice(sessions)
@@ -168,8 +168,16 @@ def generate_events(
         latency = max(200, latency)
 
         # Quality scores (Claude Code is generally reliable)
-        hallucination_score = round(random.uniform(0.0, 0.15), 3) if random.random() > 0.05 else round(random.uniform(0.4, 0.8), 3)
-        drift_score = round(random.uniform(0.0, 0.2), 3) if random.random() > 0.03 else round(random.uniform(0.3, 0.6), 3)
+        hallucination_score = (
+            round(random.uniform(0.0, 0.15), 3)
+            if random.random() > 0.05
+            else round(random.uniform(0.4, 0.8), 3)
+        )
+        drift_score = (
+            round(random.uniform(0.0, 0.2), 3)
+            if random.random() > 0.03
+            else round(random.uniform(0.3, 0.6), 3)
+        )
 
         # Stop reasons
         stop_reason = random.choices(
@@ -257,7 +265,11 @@ def generate_events(
     events.sort(key=lambda e: e["timestamp"])
 
     # Calculate actual totals for display
-    total_cost = sum(e.get("cost", {}).get("total_cost", 0) for e in events if e["event_type"] == "llm_response")
+    total_cost = sum(
+        e.get("cost", {}).get("total_cost", 0)
+        for e in events
+        if e["event_type"] == "llm_response"
+    )
 
     return events, total_cost
 
@@ -293,12 +305,15 @@ def send_events(events: List[Dict], backend_url: str, batch_size: int = 50):
 def main():
     parser = argparse.ArgumentParser(description="Generate demo data for AgentWatch")
     parser.add_argument("--events", type=int, default=5000, help="Number of LLM events to generate")
-    parser.add_argument("--hours", type=int, default=720, help="Time span in hours (default: 720 = 30 days)")
+    parser.add_argument(
+        "--hours", type=int, default=720,
+        help="Time span in hours (default: 720 = 30 days)",
+    )
     parser.add_argument("--backend", type=str, default="http://localhost:8100", help="Backend URL")
     args = parser.parse_args()
 
-    print(f"\n  AgentWatch Demo Data Generator")
-    print(f"  ================================")
+    print("\n  AgentWatch Demo Data Generator")
+    print("  ================================")
     print(f"  Simulating {args.events} Claude Code interactions over {args.hours // 24}d...")
     print()
 
@@ -306,7 +321,7 @@ def main():
     llm_events = [e for e in events if e["event_type"] == "llm_response"]
     tool_events = [e for e in events if e["event_type"] == "tool_call"]
 
-    print(f"  Generated:")
+    print("  Generated:")
     print(f"    {len(llm_events)} LLM responses")
     print(f"    {len(tool_events)} tool calls")
     print(f"    {len(events)} total events")
@@ -319,7 +334,7 @@ def main():
     for e in llm_events:
         p = e["project_id"].replace("claude-code:", "")
         project_costs[p] = project_costs.get(p, 0) + e["cost"]["total_cost"]
-    print(f"  By project:")
+    print("  By project:")
     for p, c in sorted(project_costs.items(), key=lambda x: -x[1]):
         print(f"    {p:24s} ${c:,.2f}")
     print()
@@ -327,7 +342,7 @@ def main():
     print(f"  Sending to {args.backend}...")
     sent = send_events(events, args.backend)
     print(f"\n  Done! {sent} events ingested.")
-    print(f"  Open dashboard/index.html to see your data.\n")
+    print("  Open dashboard/index.html to see your data.\n")
 
 
 if __name__ == "__main__":

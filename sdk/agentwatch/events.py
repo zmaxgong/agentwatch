@@ -1,8 +1,8 @@
 """Event types and data structures for AgentWatch telemetry."""
 
-import uuid
 import time
-from dataclasses import dataclass, field, asdict
+import uuid
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 

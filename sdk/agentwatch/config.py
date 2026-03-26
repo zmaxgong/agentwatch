@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-
 # Pricing per million tokens (as of March 2026)
 MODEL_PRICING = {
     # Anthropic

@@ -10,11 +10,12 @@ Usage:
     python quickstart.py
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdk"))
 
-from agentwatch import AgentWatch, MonitoredClient, AgentWatchConfig
+from agentwatch import AgentWatch, AgentWatchConfig, MonitoredClient
 
 
 def main():
@@ -42,7 +43,13 @@ def main():
             model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[
-                {"role": "user", "content": "What are the top 3 benefits of monitoring AI agents in production?"}
+                {
+                    "role": "user",
+                    "content": (
+                        "What are the top 3 benefits of "
+                        "monitoring AI agents in production?"
+                    ),
+                }
             ],
         )
         print(f"\nResponse:\n{response.content[0].text}\n")

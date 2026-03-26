@@ -8,17 +8,18 @@ Lightweight FastAPI server that:
 - Provides real-time updates via SSE
 """
 
-import json
-import time
-import sqlite3
 import asyncio
+import json
 import logging
+import os
+import sqlite3
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -26,7 +27,6 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentwatch-server")
 
-import os
 DB_PATH = Path(os.environ.get("AGENTWATCH_DB", "/tmp/agentwatch.db"))
 
 # --- Database ---
@@ -151,7 +151,11 @@ async def ingest_events(batch: EventBatch):
                     drift_score, error_type, error_message,
                     tool_name, stop_reason, response_preview,
                     security_flags_json, metadata_json, tags_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
             """, (
                 event.get("event_id", ""),
                 event.get("event_type", ""),
@@ -355,7 +359,11 @@ async def dashboard_alerts(
     """Get recent alerts (security, cost, hallucination, drift)."""
     conn = get_db()
     cutoff = time.time() - (hours * 3600)
-    where = "WHERE timestamp > ? AND event_type IN ('security_alert', 'cost_alert', 'hallucination_detected', 'drift_detected')"
+    where = (
+        "WHERE timestamp > ? AND event_type IN "
+        "('security_alert', 'cost_alert', "
+        "'hallucination_detected', 'drift_detected')"
+    )
     params: list = [cutoff]
     if project_id:
         where += " AND project_id = ?"
@@ -423,7 +431,10 @@ async def dashboard_tools(
     """Get tool usage breakdown for heatmap."""
     conn = get_db()
     cutoff = time.time() - (hours * 3600)
-    where = "WHERE timestamp > ? AND event_type = 'tool_call' AND tool_name IS NOT NULL AND tool_name != ''"
+    where = (
+        "WHERE timestamp > ? AND event_type = 'tool_call' "
+        "AND tool_name IS NOT NULL AND tool_name != ''"
+    )
     params: list = [cutoff]
     if project_id:
         where += " AND project_id = ?"
@@ -760,7 +771,10 @@ async def dashboard_comparison(
             "cost": delta(current.get("cost", 0), previous.get("cost", 0)),
             "tokens": delta(current.get("tokens", 0), previous.get("tokens", 0)),
             "avg_latency": delta(current.get("avg_latency", 0), previous.get("avg_latency", 0)),
-            "avg_hallucination": delta(current.get("avg_hallucination", 0), previous.get("avg_hallucination", 0)),
+            "avg_hallucination": delta(
+                current.get("avg_hallucination", 0),
+                previous.get("avg_hallucination", 0),
+            ),
             "errors": delta(current.get("errors", 0), previous.get("errors", 0)),
         },
     }
@@ -897,7 +911,10 @@ async def dashboard_usage_patterns(
             CAST(strftime('%H', timestamp, 'unixepoch', 'localtime') AS INTEGER) as hour,
             COUNT(*) as count
         FROM events
-        WHERE timestamp > ? AND event_type = 'tool_call' AND tool_name IS NOT NULL AND tool_name != ''
+        WHERE timestamp > ?
+            AND event_type = 'tool_call'
+            AND tool_name IS NOT NULL
+            AND tool_name != ''
         GROUP BY tool_name, hour
         ORDER BY tool_name, hour
     """, [cutoff]).fetchall()
@@ -995,7 +1012,13 @@ async def dashboard_share_stats(
         "savings_pct": round((savings / max(monthly_projected, 0.01)) * 100, 0),
         "daily_avg": round(daily_avg, 2),
         "top_model": top_model["model"] if top_model else "N/A",
-        "top_project": (top_project["project_id"] or "").replace("claude-code:", "") if top_project else "N/A",
+        "top_project": (
+            (top_project["project_id"] or "").replace(
+                "claude-code:", ""
+            )
+            if top_project
+            else "N/A"
+        ),
         "unique_tools": tool_count["c"] if tool_count else 0,
     }
 

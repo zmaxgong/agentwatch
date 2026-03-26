@@ -1,10 +1,10 @@
 """Detection modules for hallucinations, security issues, and behavioral drift."""
 
 import re
-import hashlib
-from typing import Dict, List, Optional, Tuple
 from collections import deque
-from .events import SecurityFlag, AlertSeverity
+from typing import List, Optional, Tuple
+
+from .events import AlertSeverity, SecurityFlag
 
 
 class SecurityDetector:

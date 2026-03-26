@@ -11,17 +11,16 @@ Usage:
     python -m agentwatch.claude_code_import --watch  # live tail mode
 """
 
-import json
-import glob
-import time
-import uuid
-import logging
 import hashlib
+import json
+import logging
+import time
 import urllib.request
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("agentwatch.claude_code")
 

@@ -1,8 +1,7 @@
 """Basic tests for the AgentWatch SDK."""
 
-import sys
 import os
-import time
+import sys
 
 # Ensure SDK is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdk"))
@@ -10,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdk"))
 
 def test_import():
     """SDK modules can be imported."""
-    from agentwatch import AgentWatch, MonitoredClient, AgentWatchConfig, Event, EventType
+    from agentwatch import AgentWatch, AgentWatchConfig, MonitoredClient
     assert AgentWatch is not None
     assert MonitoredClient is not None
     assert AgentWatchConfig is not None
