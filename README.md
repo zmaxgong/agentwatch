@@ -25,13 +25,7 @@
 
 <br />
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/demo.mp4" width="800" autoplay loop muted>
-    <img src="docs/screenshots/overview.png" alt="AgentWatch Dashboard" width="800" />
-  </video>
-</p>
-
-> **Note:** The video above may not render in all browsers. [Watch the demo](docs/demo.mp4) or see the [screenshots below](#features).
+https://github.com/user-attachments/assets/c6b565e5-8ba5-41f5-89c7-001d45c25a13
 
 ---
 
