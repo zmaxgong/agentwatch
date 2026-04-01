@@ -14,6 +14,7 @@ import logging
 import os
 import sqlite3
 import time
+import urllib.request
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,42 @@ from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentwatch-server")
+
+SLACK_WEBHOOK_URL = os.environ.get("AGENTWATCH_SLACK_WEBHOOK")
+ALERT_EVENT_TYPES = {"security_alert", "cost_alert", "hallucination_detected", "drift_detected"}
+
+
+def _send_slack_alert(event: Dict) -> None:
+    """Fire-and-forget Slack webhook for alert events."""
+    if not SLACK_WEBHOOK_URL:
+        return
+    try:
+        event_type = event.get("event_type", "unknown")
+        model = event.get("model", "N/A")
+        project = event.get("project_id", "N/A")
+        cost = event.get("cost", {}).get("total_cost", 0)
+        payload = json.dumps(
+            {
+                "text": (
+                    f":rotating_light: *AgentWatch Alert*\n"
+                    f"• Type: `{event_type}`\n"
+                    f"• Model: `{model}`\n"
+                    f"• Project: `{project}`\n"
+                    f"• Cost: ${cost:.4f}\n"
+                    f"• Error: {event.get('error_message') or 'N/A'}"
+                )
+            }
+        ).encode()
+        req = urllib.request.Request(
+            SLACK_WEBHOOK_URL,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        logger.warning(f"Slack webhook failed: {e}")
+
 
 _default_db_dir = Path.home() / ".agentwatch"
 _default_db_dir.mkdir(parents=True, exist_ok=True)
@@ -204,6 +241,10 @@ async def ingest_events(batch: EventBatch):
                     "cost": cost.get("total_cost", 0),
                 }
             )
+
+            # Send Slack alert for alert-type events
+            if event.get("event_type") in ALERT_EVENT_TYPES:
+                _send_slack_alert(event)
 
         except Exception as e:
             logger.error(f"Failed to insert event: {e}")
@@ -1172,6 +1213,72 @@ async def export_data(
         },
         "count": len(events),
         "events": [dict(e) for e in events],
+    }
+
+
+@app.get("/api/v1/retention/stats")
+async def retention_stats():
+    """Get database size and event age distribution."""
+    conn = get_db()
+    now = time.time()
+
+    total = conn.execute("SELECT COUNT(*) as c FROM events").fetchone()["c"]
+    oldest = conn.execute("SELECT MIN(timestamp) as t FROM events").fetchone()["t"]
+    newest = conn.execute("SELECT MAX(timestamp) as t FROM events").fetchone()["t"]
+
+    buckets = {}
+    for label, hours in [("24h", 24), ("7d", 168), ("30d", 720), ("90d", 2160), ("older", None)]:
+        if hours:
+            cutoff = now - (hours * 3600)
+            count = conn.execute(
+                "SELECT COUNT(*) as c FROM events WHERE timestamp > ?", [cutoff]
+            ).fetchone()["c"]
+        else:
+            cutoff = now - (2160 * 3600)
+            count = conn.execute(
+                "SELECT COUNT(*) as c FROM events WHERE timestamp <= ?", [cutoff]
+            ).fetchone()["c"]
+        buckets[label] = count
+
+    db_size_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+
+    conn.close()
+    return {
+        "total_events": total,
+        "oldest_event": datetime.utcfromtimestamp(oldest).isoformat() + "Z" if oldest else None,
+        "newest_event": datetime.utcfromtimestamp(newest).isoformat() + "Z" if newest else None,
+        "db_size_mb": round(db_size_bytes / (1024 * 1024), 2),
+        "distribution": buckets,
+    }
+
+
+@app.delete("/api/v1/retention/cleanup")
+async def retention_cleanup(
+    older_than_days: int = Query(default=90, ge=1, le=365),
+    dry_run: bool = Query(default=True),
+):
+    """Delete events older than N days. Use dry_run=true to preview."""
+    conn = get_db()
+    cutoff = time.time() - (older_than_days * 86400)
+
+    count = conn.execute(
+        "SELECT COUNT(*) as c FROM events WHERE timestamp < ?", [cutoff]
+    ).fetchone()["c"]
+
+    deleted = 0
+    if not dry_run and count > 0:
+        conn.execute("DELETE FROM events WHERE timestamp < ?", [cutoff])
+        conn.commit()
+        conn.execute("PRAGMA optimize")
+        deleted = count
+
+    conn.close()
+    return {
+        "older_than_days": older_than_days,
+        "dry_run": dry_run,
+        "events_matched": count,
+        "events_deleted": deleted,
+        "cutoff_date": datetime.utcfromtimestamp(cutoff).isoformat() + "Z",
     }
 
 

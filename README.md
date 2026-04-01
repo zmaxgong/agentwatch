@@ -221,8 +221,33 @@ AgentWatch works out of the box. For customization:
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `AGENTWATCH_DB` | `~/.agentwatch/data.db` | SQLite database path |
+| `AGENTWATCH_SLACK_WEBHOOK` | _(none)_ | Slack Incoming Webhook URL for alert notifications |
 
 SDK options (cost alert thresholds, detection toggles, batching) are in `sdk/agentwatch/config.py`.
+
+### Data Retention
+
+AgentWatch stores all events in SQLite. To manage database size:
+
+```bash
+# Preview what would be deleted (dry run, default)
+curl "http://localhost:8100/api/v1/retention/cleanup?older_than_days=90"
+
+# Actually delete events older than 90 days
+curl -X DELETE "http://localhost:8100/api/v1/retention/cleanup?older_than_days=90&dry_run=false"
+
+# Check database stats and event distribution
+curl "http://localhost:8100/api/v1/retention/stats"
+```
+
+### Slack Alerts
+
+Set `AGENTWATCH_SLACK_WEBHOOK` to receive real-time alerts in Slack when security, cost, hallucination, or drift events are detected:
+
+```bash
+export AGENTWATCH_SLACK_WEBHOOK="https://hooks.slack.com/services/T.../B.../..."
+./start.sh
+```
 
 ---
 
