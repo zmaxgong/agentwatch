@@ -41,6 +41,7 @@ pip3 install fastapi uvicorn --break-system-packages -q 2>/dev/null || pip3 inst
 
 # Start backend
 echo "  [2/4] Starting backend on port 8100..."
+echo "         Data stored in: ${AGENTWATCH_DB:-$HOME/.agentwatch/data.db}"
 cd "$BACKEND_DIR"
 python3 -m uvicorn server:app --host 0.0.0.0 --port 8100 --log-level warning &
 BACKEND_PID=$!

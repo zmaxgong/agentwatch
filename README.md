@@ -220,7 +220,7 @@ AgentWatch works out of the box. For customization:
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `AGENTWATCH_DB` | `/tmp/agentwatch.db` | SQLite database path |
+| `AGENTWATCH_DB` | `~/.agentwatch/data.db` | SQLite database path |
 
 SDK options (cost alert thresholds, detection toggles, batching) are in `sdk/agentwatch/config.py`.
 

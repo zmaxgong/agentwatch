@@ -27,7 +27,9 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentwatch-server")
 
-DB_PATH = Path(os.environ.get("AGENTWATCH_DB", "/tmp/agentwatch.db"))
+_default_db_dir = Path.home() / ".agentwatch"
+_default_db_dir.mkdir(parents=True, exist_ok=True)
+DB_PATH = Path(os.environ.get("AGENTWATCH_DB", str(_default_db_dir / "data.db")))
 
 # --- Database ---
 
@@ -776,21 +778,37 @@ async def dashboard_sessions(
 
 
 @app.get("/api/v1/dashboard/session/{session_id}")
-async def dashboard_session_detail(session_id: str):
-    """Get all events for a single session (for replay view)."""
+async def dashboard_session_detail(
+    session_id: str,
+    limit: int = Query(default=200, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+):
+    """Get events for a single session (for replay view), with pagination."""
     conn = get_db()
+
+    total = conn.execute(
+        "SELECT COUNT(*) as c FROM events WHERE session_id = ?",
+        [session_id],
+    ).fetchone()["c"]
 
     events = conn.execute(
         """
         SELECT * FROM events
         WHERE session_id = ?
         ORDER BY timestamp ASC
+        LIMIT ? OFFSET ?
     """,
-        [session_id],
+        [session_id, limit, offset],
     ).fetchall()
 
     conn.close()
-    return {"session_id": session_id, "events": [dict(e) for e in events]}
+    return {
+        "session_id": session_id,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "events": [dict(e) for e in events],
+    }
 
 
 @app.get("/api/v1/dashboard/comparison")
@@ -859,14 +877,16 @@ async def event_stream():
     async def generate():
         try:
             while True:
-                data = await asyncio.wait_for(queue.get(), timeout=30)
-                yield f"data: {json.dumps(data)}\n\n"
-        except asyncio.TimeoutError:
-            yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
         except asyncio.CancelledError:
             pass
         finally:
-            _event_subscribers.remove(queue)
+            if queue in _event_subscribers:
+                _event_subscribers.remove(queue)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -1116,9 +1136,60 @@ async def dashboard_share_stats(
     }
 
 
+@app.get("/api/v1/export")
+async def export_data(
+    hours: int = Query(default=720, ge=1, le=8760),
+    event_type: Optional[str] = Query(default=None),
+    project_id: Optional[str] = Query(default=None),
+    limit: int = Query(default=10000, ge=1, le=100000),
+):
+    """Export raw events as JSON for external analysis."""
+    conn = get_db()
+    cutoff = time.time() - (hours * 3600)
+
+    query = "SELECT * FROM events WHERE timestamp > ?"
+    params: list = [cutoff]
+
+    if event_type:
+        query += " AND event_type = ?"
+        params.append(event_type)
+    if project_id:
+        query += " AND project_id = ?"
+        params.append(project_id)
+
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+
+    events = conn.execute(query, params).fetchall()
+    conn.close()
+
+    return {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "filters": {
+            "hours": hours,
+            "event_type": event_type,
+            "project_id": project_id,
+        },
+        "count": len(events),
+        "events": [dict(e) for e in events],
+    }
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "0.1.0"}
+    """Health check with DB status."""
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT COUNT(*) as c FROM events").fetchone()
+        conn.close()
+        return {
+            "status": "ok",
+            "version": "0.1.0",
+            "db_path": str(DB_PATH),
+            "total_events": row["c"],
+        }
+    except Exception:
+        return {"status": "degraded", "version": "0.1.0", "db_path": str(DB_PATH)}
 
 
 if __name__ == "__main__":
