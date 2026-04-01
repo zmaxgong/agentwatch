@@ -3,25 +3,16 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-# Pricing per million tokens (as of March 2026)
-MODEL_PRICING = {
-    # Anthropic
-    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.00},
-    "claude-sonnet-4-5-20250514": {"input": 3.00, "output": 15.00},
-    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
-    "claude-3-5-haiku-20241022": {"input": 0.80, "output": 4.00},
-    # OpenAI (for future multi-model support)
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "o1": {"input": 15.00, "output": 60.00},
-    "o1-mini": {"input": 3.00, "output": 12.00},
-    # Google (for future multi-model support)
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-2.0-pro": {"input": 1.25, "output": 5.00},
-}
+from .pricing import get_model_pricing
+
+
+# Pricing per million tokens - fetched from provider APIs with fallback to hardcoded
+def _get_pricing():
+    """Lazy-load pricing to avoid circular imports and allow caching."""
+    return get_model_pricing()
+
+# This is evaluated once on first access - MODEL_PRICING is a function that returns current pricing
+MODEL_PRICING = _get_pricing()
 
 
 @dataclass
